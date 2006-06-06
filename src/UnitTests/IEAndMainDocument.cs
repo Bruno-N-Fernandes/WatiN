@@ -58,7 +58,7 @@ namespace WatiN.UnitTests
         Assert.IsTrue(ie.MainDocument.ContainsText("WatiN"));
       }
     }
-    
+
     [Test]
     public void GoogleFormSubmit()
     {
@@ -159,37 +159,26 @@ namespace WatiN.UnitTests
     }
 
     [Test]
-    public void AttachToIEByParialTitle()
+    public void FindIEByPartialTitle()
     {
       using (IE ie = new IE(mainURI.ToString()))
       {
-        int ieCount = IE.InternetExplorers().Length;
-
         ie.MainDocument.Link("testlinkid").Click();
-        using (IE ieGoogle = IE.AttachToIE(Find.ByTitle("gOo")))
-        {
-          Assert.AreEqual(googleURI.ToString(), ieGoogle.Url);
-        }
-        
-        Assert.AreEqual(ieCount,IE.InternetExplorers().Length, "IE instance should be closed.");
+        IE ieGoogle = IE.AttachToIE(Find.ByTitle("gOo"));
+        Assert.AreEqual(googleURI.ToString(), ieGoogle.Url);
+        ieGoogle.Close();
       }
     }
 
     [Test]
-    public void AttachToIEByURL()
+    public void FindIEByURL()
     {
-      
       using (IE ie = new IE(mainURI.ToString()))
       {
-        int ieCount = IE.InternetExplorers().Length;
-        
         ie.MainDocument.Link("testlinkid").Click();
-        using (IE ieGoogle = IE.AttachToIE(Find.ByUrl(googleURI.ToString())))
-        {
-          Assert.AreEqual(googleURI.ToString(), ieGoogle.Url);
-        }
-        
-        Assert.AreEqual(ieCount,IE.InternetExplorers().Length, "IE instance should be closed.");
+        IE ieGoogle = IE.AttachToIE(Find.ByUrl(googleURI.ToString()));
+        Assert.AreEqual(googleURI.ToString(), ieGoogle.Url);
+        ieGoogle.Close();
       }
     }
 
