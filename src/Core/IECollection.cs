@@ -17,95 +17,108 @@
 #endregion Copyright
 
 using System.Collections;
+
 using SHDocVw;
 
 namespace WatiN.Core
 {
-	/// <summary>
-	/// A typed collection of open <see cref="IE" /> instances.
-	/// </summary>
-	public class IECollection : IEnumerable
-	{
-		private ArrayList internetExplorers;
+  /// <summary>
+  /// A typed collection of open <see cref="IE" /> instances.
+  /// </summary>
+  public class IECollection : IEnumerable
+  {
+    ArrayList internetExplorers;
+		
+    public IECollection() 
+    {
+      internetExplorers = new ArrayList();
 
-		public IECollection()
-		{
-			internetExplorers = new ArrayList();
+      ShellWindows allBrowsers = new ShellWindows();
 
-			ShellWindows allBrowsers = new ShellWindows();
+      foreach(InternetExplorer internetExplorer in allBrowsers)
+      {
+        try
+        {
+          IE ie = new IE(internetExplorer);
+          internetExplorers.Add(ie);
+        }
+        catch
+        {}
+      }
+    }
+    
+    public int Length 
+    { 
+      get
+      {
+        return internetExplorers.Count;
+      } 
+    }
 
-			foreach (InternetExplorer internetExplorer in allBrowsers)
-			{
-				try
-				{
-					IE ie = new IE(internetExplorer);
-					internetExplorers.Add(ie);
-				}
-				catch {}
-			}
-		}
+    public IE this[int index]
+    {
+      get
+      {
+        return GetIEByIndex(internetExplorers, index);
+      }
+    }
 
-		public int Length
-		{
-			get { return internetExplorers.Count; }
-		}
+    private static IE GetIEByIndex(ArrayList internetExplorers, int index)
+    {
+      IE ie = (IE)internetExplorers[index];
+      ie.WaitForComplete();
 
-		public IE this[int index]
-		{
-			get { return GetIEByIndex(internetExplorers, index); }
-		}
+      return ie;
+    }
 
-		private static IE GetIEByIndex(ArrayList internetExplorers, int index)
-		{
-			IE ie = (IE) internetExplorers[index];
-			ie.WaitForComplete();
+    /// <exclude />
+    public Enumerator GetEnumerator() 
+    {
+      return new Enumerator(internetExplorers);
+    }
 
-			return ie;
-		}
+    IEnumerator IEnumerable.GetEnumerator() 
+    {
+      return GetEnumerator();
+    }
 
-		/// <exclude />
-		public Enumerator GetEnumerator()
-		{
-			return new Enumerator(internetExplorers);
-		}
+    /// <exclude />
+    public class Enumerator: IEnumerator 
+    {
+      ArrayList children;
+      int index;
+      public Enumerator(ArrayList children) 
+      {
+        this.children = children;
+        Reset();
+      }
 
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return GetEnumerator();
-		}
+      public void Reset() 
+      {
+        index = -1;
+      }
 
-		/// <exclude />
-		public class Enumerator : IEnumerator
-		{
-			private ArrayList children;
-			private int index;
+      public bool MoveNext() 
+      {
+        ++index;
+        return index < children.Count;
+      }
 
-			public Enumerator(ArrayList children)
-			{
-				this.children = children;
-				Reset();
-			}
+      public IE Current 
+      {
+        get 
+        {
+          return GetIEByIndex(children, index);
+        }
+      }
 
-			public void Reset()
-			{
-				index = -1;
-			}
-
-			public bool MoveNext()
-			{
-				++index;
-				return index < children.Count;
-			}
-
-			public IE Current
-			{
-				get { return GetIEByIndex(children, index); }
-			}
-
-			object IEnumerator.Current
-			{
-				get { return Current; }
-			}
-		}
-	}
+      object IEnumerator.Current
+      {
+        get
+        {
+          return Current;
+        }
+      }
+    }
+  }
 }

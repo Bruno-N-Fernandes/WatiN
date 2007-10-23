@@ -17,93 +17,145 @@
 #endregion Copyright
 
 using System.Collections;
+
 using mshtml;
+using SHDocVw;
+using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
 {
-	/// <summary>
-	/// A typed collection of <see cref="Frame" /> instances within a <see cref="Document"/>.
-	/// </summary>
-	public class FrameCollection : IEnumerable
-	{
-		private ArrayList elements;
+  /// <summary>
+  /// A typed collection of <see cref="Frame" /> instances within a <see cref="Document"/>.
+  /// </summary>
+  public class FrameCollection : IEnumerable
+  {
+    ArrayList elements;
+		
+    public FrameCollection(DomContainer ie, IHTMLDocument2 htmlDocument) 
+    {
+      AllFramesProcessor processor = new AllFramesProcessor(ie, (HTMLDocument)htmlDocument);
+      
+      NativeMethods.EnumIWebBrowser2Interfaces(processor);
+      
+      elements = processor.elements;
+    }
 
-		public FrameCollection(DomContainer ie, IHTMLDocument2 htmlDocument)
-		{
-			AllFramesProcessor processor = new AllFramesProcessor(ie, (HTMLDocument) htmlDocument);
+    public int Length { get { return elements.Count; } }
 
-			NativeMethods.EnumIWebBrowser2Interfaces(processor);
+    public Frame this[int index] { get { return (Frame)elements[index]; } }
 
-			elements = processor.elements;
-		}
+    public bool Exists(AttributeConstraint findBy)
+    {
+      foreach (Frame frame in elements)
+      {
+        if (findBy.Compare(frame))
+        {
+          // Return
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    /// <exclude />
+    public Enumerator GetEnumerator() 
+    {
+      return new Enumerator(elements);
+    }
 
-		public int Length
-		{
-			get { return elements.Count; }
-		}
+    IEnumerator IEnumerable.GetEnumerator() 
+    {
+      return GetEnumerator();
+    }
 
-		public Frame this[int index]
-		{
-			get { return (Frame) elements[index]; }
-		}
+    /// <exclude />
+    public class Enumerator: IEnumerator 
+    {
+      ArrayList children;
+      int index;
+      public Enumerator(ArrayList children) 
+      {
+        this.children = children;
+        Reset();
+      }
 
-		public bool Exists(AttributeConstraint findBy)
-		{
-			foreach (Frame frame in elements)
-			{
-				if (findBy.Compare(frame))
-				{
-					// Return
-					return true;
-				}
-			}
+      public void Reset() 
+      {
+        index = -1;
+      }
 
-			return false;
-		}
+      public bool MoveNext() 
+      {
+        ++index;
+        return index < children.Count;
+      }
 
-		/// <exclude />
-		public Enumerator GetEnumerator()
-		{
-			return new Enumerator(elements);
-		}
+      public Frame Current 
+      {
+        get 
+        {
+          return (Frame)children[index];
+        }
+      }
 
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return GetEnumerator();
-		}
+      object IEnumerator.Current { get { return Current; } }
+    }
+  }
+  
+  internal class AllFramesProcessor : IWebBrowser2Processor
+  {
+    public ArrayList elements;
+    
+    private HTMLDocument htmlDocument;
+    private IHTMLElementCollection frameElements;
+    private int index = 0;
+    private DomContainer ie;
+    
+    public AllFramesProcessor(DomContainer ie, HTMLDocument htmlDocument)
+    {
+      elements = new ArrayList();
 
-		/// <exclude />
-		public class Enumerator : IEnumerator
-		{
-			private ArrayList children;
-			private int index;
+      frameElements = (IHTMLElementCollection)htmlDocument.all.tags(ElementsSupport.FrameTagName);
+      
+      // If the current document doesn't contain FRAME elements, it then
+      // might contain IFRAME elements.
+      if (frameElements.length == 0)
+      {
+        frameElements = (IHTMLElementCollection)htmlDocument.all.tags("IFRAME");
+      }
 
-			public Enumerator(ArrayList children)
-			{
-				this.children = children;
-				Reset();
-			}
+      this.ie = ie;
+      this.htmlDocument = htmlDocument;  
+    }
 
-			public void Reset()
-			{
-				index = -1;
-			}
+    public HTMLDocument HTMLDocument()
+    {
+      return htmlDocument;
+    }
 
-			public bool MoveNext()
-			{
-				++index;
-				return index < children.Count;
-			}
+    public void Process(IWebBrowser2 webBrowser2)
+    {
+      // Get the frame element from the parent document
+      IHTMLElement frameElement = (IHTMLElement)frameElements.item(index, null);
+            
+      string frameName = null;
+      string frameId = null;
 
-			public Frame Current
-			{
-				get { return (Frame) children[index]; }
-			}
+      if (frameElement != null)
+      {
+        frameId = frameElement.id;
+        frameName = frameElement.getAttribute("name", 0) as string;
+      }
 
-			object IEnumerator.Current
-			{
-				get { return Current; }
-			}
-		}
-	}
+      Frame frame = new Frame(ie, webBrowser2.Document as IHTMLDocument2, frameName, frameId);
+      elements.Add(frame);
+                
+      index++;
+    }
+
+    public bool Continue()
+    {
+      return true;
+    }
+  }
 }

@@ -23,214 +23,430 @@ using mshtml;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
 
+namespace WatiN.Core.Interfaces
+{
+  public interface IElementCollection
+  {
+    IHTMLElementCollection Elements{ get; }
+  }
+}
+
 namespace WatiN.Core
 {
-	/// <summary>
-	/// This class is mainly used internally by WatiN to find elements in
-	/// an <see cref="IHTMLElementCollection"/> or <see cref="ArrayList"/> matching
-	/// the given <see cref="AttributeConstraint"/>.
-	/// </summary>
-	public class ElementFinder
-	{
-		private ArrayList tagsToFind = new ArrayList();
+  /// <summary>
+  /// This class is mainly used internally by WatiN to find elements in
+  /// an <see cref="IHTMLElementCollection"/> or <see cref="ArrayList"/> matching
+  /// the given <see cref="AttributeConstraint"/>.
+  /// </summary>
+  public class ElementFinder
+  {
+    private ArrayList tagsToFind = new ArrayList();
+    
+    protected readonly AttributeConstraint findBy;
+    protected readonly IElementCollection elementCollection;
 
-		protected readonly AttributeConstraint findBy;
-		protected readonly IElementCollection elementCollection;
+    public ElementFinder(ArrayList elementTags, AttributeConstraint findBy, IElementCollection elementCollection)
+    {
+      if (elementCollection == null) { throw new ArgumentNullException("elementCollection"); }
 
-		public ElementFinder(ArrayList elementTags, AttributeConstraint findBy, IElementCollection elementCollection)
-		{
-			if (elementCollection == null)
-			{
-				throw new ArgumentNullException("elementCollection");
-			}
+      this.findBy = getFindBy(findBy);
+      this.elementCollection = elementCollection;
+      
+      if (elementTags != null)
+      {
+        tagsToFind = elementTags;
+      }
+      else
+      {
+        AddElementTag(null, null);
+      }
+    }
 
-			this.findBy = getFindBy(findBy);
-			this.elementCollection = elementCollection;
+    public ElementFinder(ArrayList elementTags, IElementCollection elementCollection) : this(elementTags, null, elementCollection)
+    {}
+    
+    public ElementFinder(string tagName, string inputType, AttributeConstraint findBy, IElementCollection elementCollection)
+    {
+      if (elementCollection == null) { throw new ArgumentNullException("elementCollection"); }
 
-			if (elementTags != null)
-			{
-				tagsToFind = elementTags;
-			}
-			else
-			{
-				AddElementTag(null, null);
-			}
-		}
+      this.findBy = getFindBy(findBy);
+      this.elementCollection = elementCollection;
+      
+      AddElementTag(tagName, inputType);
+    }
+    
+    public ElementFinder(string tagName, string inputType, IElementCollection elementCollection): this(tagName, inputType, null, elementCollection)
+    {}
 
-		public ElementFinder(ArrayList elementTags, IElementCollection elementCollection) : this(elementTags, null, elementCollection) {}
+    public virtual IHTMLElement FindFirst()
+    {            
+      return FindFirst(false);
+    }
 
-		public ElementFinder(string tagName, string inputType, AttributeConstraint findBy, IElementCollection elementCollection)
-		{
-			if (elementCollection == null)
-			{
-				throw new ArgumentNullException("elementCollection");
-			}
+    public virtual IHTMLElement FindFirst(bool throwExceptionIfElementNotFound)
+    {      
+      foreach (ElementTag elementTag in tagsToFind)
+      {
+        ArrayList elements = findElementsByAttribute(elementTag, findBy, true);
 
-			this.findBy = getFindBy(findBy);
-			this.elementCollection = elementCollection;
+        if (elements.Count > 0)
+        {
+          return (IHTMLElement)elements[0];
+        }
+      }
 
-			AddElementTag(tagName, inputType);
-		}
+      if (throwExceptionIfElementNotFound)
+      {
+        throw CreateElementNotFoundException();
+      }
+      
+      return null;
+    }
 
-		public ElementFinder(string tagName, string inputType, IElementCollection elementCollection) : this(tagName, inputType, null, elementCollection) {}
+    internal ElementNotFoundException CreateElementNotFoundException()
+    {
+      return new ElementNotFoundException(GetExceptionMessage(tagsToFind), findBy.AttributeName, findBy.Value);
+    }
 
-		public virtual IHTMLElement FindFirst()
-		{
-			return FindFirst(false);
-		}
+    internal ElementNotFoundException CreateElementNotFoundException(Exception innerexception)
+    {
+      return new ElementNotFoundException(GetExceptionMessage(tagsToFind), findBy.AttributeName, findBy.Value, innerexception);
+    }
 
-		public virtual IHTMLElement FindFirst(bool throwExceptionIfElementNotFound)
-		{
-			foreach (ElementTag elementTag in tagsToFind)
-			{
-				ArrayList elements = findElementsByAttribute(elementTag, findBy, true);
+    public void AddElementTag(string tagName, string inputType)
+    {
+      tagsToFind.Add(new ElementTag(tagName, inputType));
+    }
+    
+    public ArrayList FindAll()
+    {
+      return FindAll(findBy);
+    }
+    
+    public ArrayList FindAll(AttributeConstraint findBy)
+    {
+      if (tagsToFind.Count == 1)
+      {
+        return findElementsByAttribute((ElementTag)tagsToFind[0], findBy, false);
+      }
+      else 
+      {
+        ArrayList elements = new ArrayList();
+      
+        foreach (ElementTag elementTag in tagsToFind)
+        {
+          elements.AddRange(findElementsByAttribute(elementTag, findBy, false));
+        }
+    
+        return elements;
+      }
+    }
 
-				if (elements.Count > 0)
-				{
-					return (IHTMLElement) elements[0];
-				}
-			}
+    private static AttributeConstraint getFindBy(AttributeConstraint findBy)
+    {
+      if (findBy == null)
+      {
+        return new AlwaysTrueAttribute();
+      }
+      return findBy;
+    }
 
-			if (throwExceptionIfElementNotFound)
-			{
-				throw CreateElementNotFoundException();
-			}
+    private ArrayList findElementsByAttribute(ElementTag elementTag, AttributeConstraint findBy, bool returnAfterFirstMatch)
+    {
+      // Get elements with the tagname from the page
+      ArrayList children = new ArrayList();
+      IHTMLElementCollection elements = elementTag.GetElementCollection(elementCollection.Elements);
 
-			return null;
-		}
+      if (elements != null)
+      {
+        ElementAttributeBag attributeBag = new ElementAttributeBag();
+      
+        // Loop through each element and evaluate
+        foreach (IHTMLElement element in elements)
+        {
+          waitUntilElementReadyStateIsComplete(element);
 
-		internal ElementNotFoundException CreateElementNotFoundException()
-		{
-			return new ElementNotFoundException(GetExceptionMessage(tagsToFind), findBy.AttributeName, findBy.Value);
-		}
+          attributeBag.IHTMLElement = element;
+        
+          if (elementTag.Compare(element) && findBy.Compare(attributeBag))
+          {
+            children.Add(element);
+            if (returnAfterFirstMatch)
+            {
+              return children;
+            }
+          }
+        }
+      }
 
-		internal ElementNotFoundException CreateElementNotFoundException(Exception innerexception)
-		{
-			return new ElementNotFoundException(GetExceptionMessage(tagsToFind), findBy.AttributeName, findBy.Value, innerexception);
-		}
+      return children;
+    }
 
-		public void AddElementTag(string tagName, string inputType)
-		{
-			tagsToFind.Add(new ElementTag(tagName, inputType));
-		}
+    private static void waitUntilElementReadyStateIsComplete(IHTMLElement element)
+    {
+      //TODO: See if this method could be dropped, it seems to give
+      //      more trouble (uninitialized state of elements)
+      //      then benefits (I just introduced this method to be on 
+      //      the save side)
+      
+      if (ElementTag.IsValidElement(element, Image.ElementTags))
+      {
+        return;
+      }
+      
+      // Wait if the readystate of an element is BETWEEN
+      // Uninitialized and Complete. If it's uninitialized,
+      // it's quite probable that it will never reach Complete.
+      // Like for elements that could not load an image or ico
+      // or some other bits not part of the HTML page.     
+      SimpleTimer timeoutTimer = new SimpleTimer(30);
 
-		public ArrayList FindAll()
-		{
-			return FindAll(findBy);
-		}
+      do
+      {
+        int readyState = ((IHTMLElement2)element).readyStateValue;
 
-		public ArrayList FindAll(AttributeConstraint findBy)
-		{
-			if (tagsToFind.Count == 1)
-			{
-				return findElementsByAttribute((ElementTag) tagsToFind[0], findBy, false);
-			}
-			else
-			{
-				ArrayList elements = new ArrayList();
+        if (readyState == 0 || readyState == 4)
+        {
+          return;
+        }
 
-				foreach (ElementTag elementTag in tagsToFind)
-				{
-					elements.AddRange(findElementsByAttribute(elementTag, findBy, false));
-				}
+        Thread.Sleep(100);
 
-				return elements;
-			}
-		}
+      } while (!timeoutTimer.Elapsed);
 
-		private static AttributeConstraint getFindBy(AttributeConstraint findBy)
-		{
-			if (findBy == null)
-			{
-				return new AlwaysTrueAttributeConstraint();
-			}
-			return findBy;
-		}
+      throw new WatiNException("Element didn't reach readystate = complete within 30 seconds: " + element.outerText);
+    }
 
-		private ArrayList findElementsByAttribute(ElementTag elementTag, AttributeConstraint findBy, bool returnAfterFirstMatch)
-		{
-			// Get elements with the tagname from the page
-			ArrayList children = new ArrayList();
-			IHTMLElementCollection elements = elementTag.GetElementCollection(elementCollection.Elements);
+    internal static string GetExceptionMessage(ArrayList elementTags)
+    {
+      string message = String.Empty;
 
-			if (elements != null)
-			{
-				ElementAttributeBag attributeBag = new ElementAttributeBag();
+      foreach (ElementTag elementTag in elementTags)
+      {
+        if (message.Length > 0)
+        {
+          message = message + " or ";
+        }
+        message = message + elementTag.ToString();
+      }
 
-				// Loop through each element and evaluate
-				foreach (IHTMLElement element in elements)
-				{
-					waitUntilElementReadyStateIsComplete(element);
+      return message;
+    }
 
-					attributeBag.IHTMLElement = element;
+    internal static bool isInputElement(string tagName)
+    {
+      return String.Compare(tagName, ElementsSupport.InputTagName, true) == 0;
+    }
+  }
 
-					if (elementTag.Compare(element) && findBy.Compare(attributeBag))
-					{
-						children.Add(element);
-						if (returnAfterFirstMatch)
-						{
-							return children;
-						}
-					}
-				}
-			}
+  /// <summary>
+  /// Wrapper around the <see cref="mshtml.IHTMLElement"/> object. Used by <see cref="AttributeConstraint.Compare"/>.
+  /// </summary>
+  public class ElementAttributeBag : IAttributeBag
+  {
+    private IHTMLElement element = null;
 
-			return children;
-		}
+    public ElementAttributeBag()
+    {}
+    
+    public ElementAttributeBag(IHTMLElement element)
+    {
+      IHTMLElement = element;
+    }
+    
+    public IHTMLElement IHTMLElement
+    {
+      get
+      {
+        return element;
+      }
+      set 
+      { 
+        element = value;
+      }
+    }
 
-		private static void waitUntilElementReadyStateIsComplete(IHTMLElement element)
-		{
-			//TODO: See if this method could be dropped, it seems to give
-			//      more trouble (uninitialized state of elements)
-			//      then benefits (I just introduced this method to be on 
-			//      the save side)
+    public string GetValue(string attributename)
+    {
+      if (string.Compare(attributename, "style", true) == 0 )
+      {
+        return element.style.cssText;
+      }
 
-			if (ElementTag.IsValidElement(element, Image.ElementTags))
-			{
-				return;
-			}
+      object attributeValue;
+      
+      if (attributename.ToLower().StartsWith("style."))
+      {
+        attributeValue = Style.GetAttributeValue(attributename.Substring(6), element.style); 
+      }
+      else
+      {
+        attributeValue = element.getAttribute(attributename, 0);
+      }
 
-			// Wait if the readystate of an element is BETWEEN
-			// Uninitialized and Complete. If it's uninitialized,
-			// it's quite probable that it will never reach Complete.
-			// Like for elements that could not load an image or ico
-			// or some other bits not part of the HTML page.     
-			SimpleTimer timeoutTimer = new SimpleTimer(30);
+      if (attributeValue == DBNull.Value)
+      {
+        return null;
+      }
+        
+      if (attributeValue == null)
+      {
+        return null;
+      }
+      
+      return attributeValue.ToString();
+    }
+  }
 
-			do
-			{
-				int readyState = ((IHTMLElement2) element).readyStateValue;
+  /// <summary>
+  /// This class is mainly used by WatiN internally and defines 
+  /// the supported html tags for inheritors of <see cref="Element"/>.
+  /// </summary>
+  public class ElementTag
+  {
+    public readonly string TagName = null;
+    public readonly string InputTypes;
+    public readonly bool IsInputElement = false;
+      
+    public ElementTag(string tagName) : this(tagName, null)
+    {}
+    
+    public ElementTag(string tagName, string inputTypes)
+    {
+      if (tagName != null)
+      {
+        TagName = tagName.ToLower();
+      }
+      IsInputElement = ElementFinder.isInputElement(tagName);
+        
+      // Check arguments
+      if (IsInputElement)
+      {
+        if (UtilityClass.IsNullOrEmpty(inputTypes))
+        {
+          throw new ArgumentNullException("inputTypes", String.Format("inputTypes must be set when tagName is '{0}'", tagName));
+        }
+          
+        InputTypes = inputTypes.ToLower();
+      }
+    }
+    
+    public ElementTag(IHTMLElement element)
+    {
+      TagName = element.tagName.ToLower();
+      IsInputElement = ElementFinder.isInputElement(TagName);
+      if (IsInputElement)
+      {
+        IHTMLInputElement inputElement = (IHTMLInputElement)element;
+      
+        InputTypes = inputElement.type.ToLower();
+      }
+    }
 
-				if (readyState == 0 || readyState == 4)
-				{
-					return;
-				}
+    public IHTMLElementCollection GetElementCollection(IHTMLElementCollection elements)
+    {
+      if (elements == null) return null;
+        
+      if (TagName == null) return elements;
+      
+      return (IHTMLElementCollection)elements.tags(TagName);
+    }
 
-				Thread.Sleep(100);
-			} while (!timeoutTimer.Elapsed);
+    public bool Compare(object element)
+    {
+      IHTMLElement ihtmlElement = element as IHTMLElement;
+            
+      return Compare(ihtmlElement);
+    }
+      
+    public bool Compare(IHTMLElement element)
+    {
+      if (element == null)
+      {
+        return false;
+      }
+      
+      if (CompareTagName(element))
+      {
+        if (IsInputElement)
+        {
+          return CompareAgainstInputTypes(element);
+        }
+        else
+        {
+          return true;
+        }
+      }
+        
+      return false;
+    }
 
-			throw new WatiNException("Element didn't reach readystate = complete within 30 seconds: " + element.outerText);
-		}
+    public override string ToString()
+    {
+      string returnValue = string.Empty;
+      if (IsInputElement)
+      {
+        returnValue = String.Format("{0} ({1})", TagName.ToUpper(), InputTypes);
+      }
+      else if (TagName != null)
+      {
+        returnValue = TagName.ToUpper();
+      }
+      return returnValue;
+    }
 
-		internal static string GetExceptionMessage(ArrayList elementTags)
-		{
-			string message = String.Empty;
+    private bool CompareTagName(IHTMLElement element)
+    {
+      if (TagName == null)
+      {
+        return true;
+      }
+        
+      return String.Compare(TagName, element.tagName, true) == 0;
+    }
 
-			foreach (ElementTag elementTag in elementTags)
-			{
-				if (message.Length > 0)
-				{
-					message = message + " or ";
-				}
-				message = message + elementTag.ToString();
-			}
+    private bool CompareAgainstInputTypes(IHTMLElement element)
+    {
+      IHTMLInputElement inputElement = (IHTMLInputElement)element;
+      
+      string inputElementType = inputElement.type.ToLower();
+    
+      return (InputTypes.IndexOf(inputElementType) >= 0);
+    }
 
-			return message;
-		}
+    public override int GetHashCode()
+    {
+      return (TagName != null ? TagName.GetHashCode() : 0) + 29*(InputTypes != null ? InputTypes.GetHashCode() : 0);
+    }
 
-		internal static bool isInputElement(string tagName)
-		{
-			return String.Compare(tagName, ElementsSupport.InputTagName, true) == 0;
-		}
-	}
+    public override bool Equals(object obj)
+    {
+      if (this == obj) return true;
+      ElementTag elementTag = obj as ElementTag;
+      if (elementTag == null) return false;
+      if (!Equals(TagName, elementTag.TagName)) return false;
+      if (!Equals(InputTypes, elementTag.InputTypes)) return false;
+      return true;
+    }
+
+    public static bool IsValidElement(object element, ArrayList elementTags)
+    {
+      return IsValidElement(element as IHTMLElement, elementTags);
+    }
+
+    public static bool IsValidElement(IHTMLElement element, ArrayList elementTags)
+    {
+      if (element == null) return false;
+
+      foreach (ElementTag elementTag in elementTags)
+      {
+        if (elementTag.Compare(element))
+        {
+          return true;      
+        }
+      }
+      
+      return false;
+    }
+  }
 }

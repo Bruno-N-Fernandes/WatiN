@@ -16,32 +16,41 @@
 
 #endregion Copyright
 
-namespace WatiN.Core
+using WatiN.Core;
+
+namespace WatiN.Core.Interfaces
 {
-  using System.Collections;
-  using mshtml;
-
   /// <summary>
-  /// A typed collection of <see cref="TableBody"/> instances within a Document or Element. 
+  /// This interface is used by <see cref="TextField"/> to support both
+  /// HTML input element of type text password textarea hidden and 
+  /// for a HTML textarea element.
   /// </summary>
-  public class TableBodyCollection:BaseElementCollection
+  internal interface ITextElement
   {
-    public TableBodyCollection(DomContainer domContainer, ArrayList elements) : base(domContainer, elements, new CreateElementInstance(New))
+    int MaxLength
     {
+      get;
     }
 
-    public TableBodyCollection(DomContainer domContainer, ElementFinder finder) : base(domContainer, finder, new CreateElementInstance(New))
+    bool ReadOnly
     {
+      get;
     }
 
-    public TableBody this[int index]
+    string Value
     {
-      get { return new TableBody(domContainer, (IHTMLTableSection) Elements[index]);}
+      get;
     }
-        
-    private static Element New(DomContainer domContainer, IHTMLElement element)
+
+    void Select();
+    
+    void SetValue(string value);
+    
+    string ToString();
+
+    string Name
     {
-      return new TableBody(domContainer, (IHTMLTableSection)element);
+      get;
     }
   }
 }

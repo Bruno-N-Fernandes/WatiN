@@ -22,193 +22,190 @@ using mshtml;
 
 namespace WatiN.Core
 {
-	/// <summary>
-	/// This delegate is mainly used by <see cref="BaseElementCollection"/> to 
-	/// delegate the creation of a specialized element type. 
-	/// </summary>
-	public delegate Element CreateElementInstance(DomContainer domContainer, IHTMLElement element);
+  /// <summary>
+  /// This delegate is mainly used by <see cref="BaseElementCollection"/> to 
+  /// delegate the creation of a specialized element type. 
+  /// </summary>
+  public delegate Element CreateElementInstance(DomContainer domContainer, IHTMLElement element);
+  
+  /// <summary>
+  /// This class is mainly used by Watin internally as the base class for all 
+  /// of the element collections.
+  /// </summary>
+  public abstract class BaseElementCollection : IEnumerable
+  {
+    protected DomContainer domContainer;
+    
+    private ArrayList elements;
+    private CreateElementInstance createElementInstance;
+    protected ElementFinder finder;
 
-	/// <summary>
-	/// This class is mainly used by Watin internally as the base class for all 
-	/// of the element collections.
-	/// </summary>
-	public abstract class BaseElementCollection : IEnumerable
-	{
-		protected DomContainer domContainer;
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ButtonCollection"/> class.
+    /// Mainly used by WatiN internally.
+    /// </summary>
+    /// <param name="domContainer">The DOM container.</param>
+    /// <param name="finder">The finder.</param>
+    /// <param name="createElementInstance">The create element instance.</param>
+    public BaseElementCollection(DomContainer domContainer, ElementFinder finder, CreateElementInstance createElementInstance) : 
+           this(domContainer, (ArrayList)null, createElementInstance)
+    {
+      this.finder = finder;
+    }
+    
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ButtonCollection"/> class.
+    /// Mainly used by WatiN internally.
+    /// </summary>
+    /// <param name="domContainer">The DOM container.</param>
+    /// <param name="elements">The elements.</param>
+    /// <param name="createElementInstance">The create element instance.</param>
+    public BaseElementCollection(DomContainer domContainer, ArrayList elements, CreateElementInstance createElementInstance)
+    {
+      this.elements = elements;
+      this.domContainer = domContainer;
+      this.createElementInstance = createElementInstance;
+    }
 
-		private ArrayList elements;
-		private CreateElementInstance createElementInstance;
-		protected ElementFinder finder;
+    /// <summary>
+    /// Gets the length.
+    /// </summary>
+    /// <value>The length.</value>
+    public int Length { get { return Elements.Count; } }
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="ButtonCollection"/> class.
-		/// Mainly used by WatiN internally.
-		/// </summary>
-		/// <param name="domContainer">The DOM container.</param>
-		/// <param name="finder">The finder.</param>
-		/// <param name="createElementInstance">The create element instance.</param>
-		public BaseElementCollection(DomContainer domContainer, ElementFinder finder, CreateElementInstance createElementInstance) :
-			this(domContainer, (ArrayList) null, createElementInstance)
-		{
-			this.finder = finder;
-		}
+    protected ArrayList Elements
+    {
+      get
+      {
+        if (elements == null)
+        {
+          if (finder != null)
+          {
+            elements = finder.FindAll();
+          }
+          else
+          {
+            elements = new ArrayList();
+          }
+        }
+        
+        return elements;
+      }
+    }
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="ButtonCollection"/> class.
-		/// Mainly used by WatiN internally.
-		/// </summary>
-		/// <param name="domContainer">The DOM container.</param>
-		/// <param name="elements">The elements.</param>
-		/// <param name="createElementInstance">The create element instance.</param>
-		public BaseElementCollection(DomContainer domContainer, ArrayList elements, CreateElementInstance createElementInstance)
-		{
-			this.elements = elements;
-			this.domContainer = domContainer;
-			this.createElementInstance = createElementInstance;
-		}
+    public bool Exists(string elementId)
+    {
+      return Exists(Find.ById(elementId));
+    }
 
-		/// <summary>
-		/// Gets the length.
-		/// </summary>
-		/// <value>The length.</value>
-		public int Length
-		{
-			get { return Elements.Count; }
-		}
+    public bool Exists(Regex elementId)
+    {
+      return Exists(Find.ById(elementId));
+    }
+    
+    public bool Exists(AttributeConstraint findBy)
+    {
+      ElementAttributeBag attributeBag = new ElementAttributeBag();
+      
+      foreach (IHTMLElement element in Elements)
+      {
+        attributeBag.IHTMLElement = element;
+        if (findBy.Compare(attributeBag))
+        {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    protected ArrayList DoFilter(AttributeConstraint findBy)
+    {
+      ArrayList returnElements;
+      
+      if (elements == null)
+      {
+        if (finder != null)
+        {
+          returnElements = finder.FindAll(findBy);
+        }
+        else
+        {
+          returnElements = new ArrayList();
+        }
+      }
+      else
+      {
+        returnElements = new ArrayList();
+        ElementAttributeBag attributeBag = new ElementAttributeBag();
+        
+        foreach (IHTMLElement element in Elements)
+        {
+          attributeBag.IHTMLElement = element;
+          
+          if (findBy.Compare(attributeBag))
+          {
+            returnElements.Add(element);
+          }
+        }
+      }
+      
+      return returnElements;
+    }
+    
+    /// <exclude />
+    public Enumerator GetEnumerator() 
+    {
+      return new Enumerator(domContainer, Elements, createElementInstance);
+    }
+    
+    IEnumerator IEnumerable.GetEnumerator() 
+    {
+      return GetEnumerator();
+    }
 
-		protected ArrayList Elements
-		{
-			get
-			{
-				if (elements == null)
-				{
-					if (finder != null)
-					{
-						elements = finder.FindAll();
-					}
-					else
-					{
-						elements = new ArrayList();
-					}
-				}
+    /// <exclude />
+    public class Enumerator: IEnumerator 
+    {
+      ArrayList children;
+      DomContainer domContainer;
+      CreateElementInstance createElementInstance;
+      int index;
+      
+      /// <exclude />
+      public Enumerator(DomContainer domContainer, ArrayList children, CreateElementInstance createElementInstance) 
+      {
+        this.children = children;
+        this.domContainer = domContainer;
+        this.createElementInstance = createElementInstance;
+        
+        Reset();
+      }
 
-				return elements;
-			}
-		}
+      /// <exclude />
+      public void Reset() 
+      {
+        index = -1;
+      }
 
-		public bool Exists(string elementId)
-		{
-			return Exists(Find.ById(elementId));
-		}
+      /// <exclude />
+      public bool MoveNext() 
+      {
+        ++index;
+        return index < children.Count;
+      }
 
-		public bool Exists(Regex elementId)
-		{
-			return Exists(Find.ById(elementId));
-		}
+      /// <exclude />
+      public virtual object Current 
+      {
+        get
+        {
+          return createElementInstance(domContainer,(IHTMLElement)children[index]);
+        }
+      }
 
-		public bool Exists(AttributeConstraint findBy)
-		{
-			ElementAttributeBag attributeBag = new ElementAttributeBag();
-
-			foreach (IHTMLElement element in Elements)
-			{
-				attributeBag.IHTMLElement = element;
-				if (findBy.Compare(attributeBag))
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		protected ArrayList DoFilter(AttributeConstraint findBy)
-		{
-			ArrayList returnElements;
-
-			if (elements == null)
-			{
-				if (finder != null)
-				{
-					returnElements = finder.FindAll(findBy);
-				}
-				else
-				{
-					returnElements = new ArrayList();
-				}
-			}
-			else
-			{
-				returnElements = new ArrayList();
-				ElementAttributeBag attributeBag = new ElementAttributeBag();
-
-				foreach (IHTMLElement element in Elements)
-				{
-					attributeBag.IHTMLElement = element;
-
-					if (findBy.Compare(attributeBag))
-					{
-						returnElements.Add(element);
-					}
-				}
-			}
-
-			return returnElements;
-		}
-
-		/// <exclude />
-		public Enumerator GetEnumerator()
-		{
-			return new Enumerator(domContainer, Elements, createElementInstance);
-		}
-
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return GetEnumerator();
-		}
-
-		/// <exclude />
-		public class Enumerator : IEnumerator
-		{
-			private ArrayList children;
-			private DomContainer domContainer;
-			private CreateElementInstance createElementInstance;
-			private int index;
-
-			/// <exclude />
-			public Enumerator(DomContainer domContainer, ArrayList children, CreateElementInstance createElementInstance)
-			{
-				this.children = children;
-				this.domContainer = domContainer;
-				this.createElementInstance = createElementInstance;
-
-				Reset();
-			}
-
-			/// <exclude />
-			public void Reset()
-			{
-				index = -1;
-			}
-
-			/// <exclude />
-			public bool MoveNext()
-			{
-				++index;
-				return index < children.Count;
-			}
-
-			/// <exclude />
-			public virtual object Current
-			{
-				get { return createElementInstance(domContainer, (IHTMLElement) children[index]); }
-			}
-
-			/// <exclude />
-			object IEnumerator.Current
-			{
-				get { return Current; }
-			}
-		}
-	}
+      /// <exclude />
+      object IEnumerator.Current { get { return Current; } }
+    }
+  }
 }

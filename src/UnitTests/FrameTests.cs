@@ -16,173 +16,374 @@
 
 #endregion Copyright
 
+using System;
 using System.Collections;
 using NUnit.Framework;
+
+using WatiN.Core;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Logging;
 
 namespace WatiN.Core.UnitTests
 {
-	[TestFixture]
-	public class FramesetTests : WatiNTest
-	{
-		private const string frameNameContents = "contents";
-		private const string frameNameMain = "main";
+  [TestFixture]
+  public class FramesetTests : WatiNTest
+  {
+    const string frameNameContents = "contents";
+    const string frameNameMain = "main";
 
-		private IE ie;
+    private IE ie;
 
-		[TestFixtureSetUp]
-		public void Setup()
-		{
-			Logger.LogWriter = new DebugLogWriter();
+    [TestFixtureSetUp]
+    public void Setup()
+    {
+      Logger.LogWriter = new DebugLogWriter();
+            
+      ie = new IE(FramesetURI);
+    }
 
-			ie = new IE(FramesetURI);
-		}
+    [TestFixtureTearDown]
+    public void tearDown()
+    {
+      ie.Close();
+    }
 
-		[TestFixtureTearDown]
-		public void tearDown()
-		{
-			ie.Close();
-		}
+    [Test]
+    public void IEFrameIsAFrame()
+    {
+      Assert.IsInstanceOfType(typeof(Frame),ie.Frame("mainid"));
+    }
+    
+    [Test]
+    public void FrameIsADocument()
+    {
+      Assert.IsInstanceOfType(typeof(Document),ie.Frame("mainid"));
+    }
+  
+    [Test, ExpectedException(typeof(FrameNotFoundException), ExpectedMessage = "Could not find a Frame or IFrame by id with value 'NonExistingFrameID'")]
+    public void ExpectFrameNotFoundException()
+    {
+      ie.Frame(Find.ById("NonExistingFrameID"));
+    }
 
-		[Test]
-		public void IEFrameIsAFrame()
-		{
-			Assert.IsInstanceOfType(typeof (Frame), ie.Frame("mainid"));
-		}
+    [Test]
+    public void FramesCollectionExists()
+    {
+      Assert.IsTrue(ie.Frames.Exists(Find.ByName("contents")));
+      Assert.IsFalse(ie.Frames.Exists(Find.ByName("nonexisting")));
+    }
+    
+    [Test]
+    public void ContentsFrame()
+    {
+      Frame contentsFrame = ie.Frame(Find.ByName("contents"));
+      Assert.IsNotNull(contentsFrame, "Frame expected");
+      Assert.AreEqual("contents", contentsFrame.Name);
+      Assert.AreEqual(null, contentsFrame.Id);
 
-		[Test]
-		public void FrameIsADocument()
-		{
-			Assert.IsInstanceOfType(typeof (Document), ie.Frame("mainid"));
-		}
+      AssertFindFrame(ie, Find.ByUrl(IndexURI), frameNameContents);
+    }
+    
+    [Test]
+    public void MainFrame()
+    {
+      Frame mainFrame = ie.Frame(Find.ById("mainid"));
+      Assert.IsNotNull(mainFrame, "Frame expected");
+      Assert.AreEqual("main", mainFrame.Name);
+      Assert.AreEqual("mainid", mainFrame.Id);
 
-		[Test, ExpectedException(typeof (FrameNotFoundException), ExpectedMessage = "Could not find a Frame or IFrame by id with value 'NonExistingFrameID'")]
-		public void ExpectFrameNotFoundException()
-		{
-			ie.Frame(Find.ById("NonExistingFrameID"));
-		}
+      AssertFindFrame(ie, Find.ByName(frameNameMain), frameNameMain);
+    }
 
-		[Test]
-		public void FramesCollectionExists()
-		{
-			Assert.IsTrue(ie.Frames.Exists(Find.ByName("contents")));
-			Assert.IsFalse(ie.Frames.Exists(Find.ByName("nonexisting")));
-		}
+    [Test]
+    public void FrameHTMLShouldNotReturnParentHTML()
+    {
+      Frame contentsFrame = ie.Frame(Find.ByName("contents"));
+      Assert.AreNotEqual(ie.Html, contentsFrame.Html, "Html should be from the frame page.");
+    }
 
-		[Test]
-		public void ContentsFrame()
-		{
-			Frame contentsFrame = ie.Frame(Find.ByName("contents"));
-			Assert.IsNotNull(contentsFrame, "Frame expected");
-			Assert.AreEqual("contents", contentsFrame.Name);
-			Assert.AreEqual(null, contentsFrame.Id);
+    [Test]
+    public void DoesFrameCodeWorkIfToBrowsersWithFramesAreOpen()
+    {
+      using (IE ie2 = new IE(FramesetURI))
+      {
+        Frame contentsFrame = ie2.Frame(Find.ByName("contents"));
+        Assert.IsFalse(contentsFrame.Html.StartsWith("<FRAMESET"),"inner html of frame is expected");
+      }
+    }
 
-			AssertFindFrame(ie, Find.ByUrl(IndexURI), frameNameContents);
-		}
+    [Test]
+    public void Frames()
+    {
+      const int expectedFramesCount = 2;
+      FrameCollection frames = ie.Frames;
 
-		[Test]
-		public void MainFrame()
-		{
-			Frame mainFrame = ie.Frame(Find.ById("mainid"));
-			Assert.IsNotNull(mainFrame, "Frame expected");
-			Assert.AreEqual("main", mainFrame.Name);
-			Assert.AreEqual("mainid", mainFrame.Id);
+      Assert.AreEqual(expectedFramesCount, frames.Length, "Unexpected number of frames");
 
-			AssertFindFrame(ie, Find.ByName(frameNameMain), frameNameMain);
-		}
+      // Collection items by index
+      Assert.AreEqual(frameNameContents, frames[0].Name);
+      Assert.AreEqual(frameNameMain, frames[1].Name);
 
-		[Test]
-		public void FrameHTMLShouldNotReturnParentHTML()
-		{
-			Frame contentsFrame = ie.Frame(Find.ByName("contents"));
-			Assert.AreNotEqual(ie.Html, contentsFrame.Html, "Html should be from the frame page.");
-		}
+      IEnumerable frameEnumerable = frames;
+      IEnumerator frameEnumerator = frameEnumerable.GetEnumerator();
 
-		[Test]
-		public void DoesFrameCodeWorkIfToBrowsersWithFramesAreOpen()
-		{
-			using (IE ie2 = new IE(FramesetURI))
-			{
-				Frame contentsFrame = ie2.Frame(Find.ByName("contents"));
-				Assert.IsFalse(contentsFrame.Html.StartsWith("<FRAMESET"), "inner html of frame is expected");
-			}
-		}
+      // Collection iteration and comparing the result with Enumerator
+      int count = 0;
+      foreach (Frame frame in frames)
+      {
+        frameEnumerator.MoveNext();
+        object enumFrame = frameEnumerator.Current;
+        
+        Assert.IsInstanceOfType(frame.GetType(), enumFrame, "Types are not the same");
+        Assert.AreEqual(frame.Html, ((Frame)enumFrame).Html, "foreach and IEnumator don't act the same.");
+        ++count;
+      }
+      
+      Assert.IsFalse(frameEnumerator.MoveNext(), "Expected last item");
+      Assert.AreEqual(expectedFramesCount, count);
+    }
 
-		[Test]
-		public void Frames()
-		{
-			const int expectedFramesCount = 2;
-			FrameCollection frames = ie.Frames;
+    [Test]
+    public void ShowFrames()
+    {
+      UtilityClass.DumpFrames(ie);
+    }
+    
+    private static void AssertFindFrame(IE ie, AttributeConstraint findBy, string expectedFrameName)
+    {
+      Frame frame = null;
+      string attributeName = findBy.AttributeName.ToLower();
+      if (attributeName == "href" || attributeName == "name")
+      {
+        frame = ie.Frame(findBy);
+      }
+      Assert.IsNotNull(frame, "Frame '" + findBy.Value + "' not found");
+      Assert.AreEqual(expectedFrameName, frame.Name, "Incorrect frame for " + findBy.ToString() + ", " + findBy.Value);
+    }
+  }
+  
+  [TestFixture]
+  public class FramesetWithinFrameSetTests : WatiNTest
+  {   
+    [Test]
+    public void FramesLength()
+    {
+      using (IE ieframes = new IE(FramesetWithinFramesetURI))
+      {
+        Assert.AreEqual(2, ieframes.Frames.Length);
+        Assert.AreEqual(2, ieframes.Frames[1].Frames.Length);
+      }
+    }
+  }
+  
+  [TestFixture]
+  public class NoFramesTest : WatiNTest
+  {   
+    [Test]
+    public void HasNoFrames()
+    {
+      using(IE iemain = new IE(MainURI))
+      {
+        Assert.AreEqual(0, iemain.Frames.Length);
+      }
+    }
+  }
+  
+  [TestFixture, Category("InternetConnectionNeeded")]
+  public class CrossDomainTests : WatiNTest
+  {
+    private IE ieframes;
+    
+    [TestFixtureSetUp]
+    public void Setup()
+    {
+      ieframes = new IE(CrossDomainFramesetURI);
+    }
+    
+    [TestFixtureTearDown]
+    public void Teardown()
+    {
+      ieframes.Close();
+    }
+    
+    [Test]
+    public void GetGoogleFrameUsingFramesCollection()
+    {
+      try
+      {
+        ieframes.Frames[1].TextField(Find.ByName("q"));
+      }
+      catch (UnauthorizedAccessException)
+      {
+        Assert.Fail("UnauthorizedAccessException");
+      }
+      
+      Assert.AreEqual("mainid", ieframes.Frames[1].Id, "Unexpected id");
+      Assert.AreEqual("main", ieframes.Frames[1].Name, "Unexpected name");
+    }
+    
+    [Test]
+    public void GetGoogleFrameUsingFindById()
+    {
+      try
+      {
+        ieframes.Frame("mainid").TextField(Find.ByName("q"));
+      }
+      catch (UnauthorizedAccessException)
+      {
+        Assert.Fail("UnauthorizedAccessException");
+      }
 
-			Assert.AreEqual(expectedFramesCount, frames.Length, "Unexpected number of frames");
+      Assert.AreEqual("mainid", ieframes.Frame("mainid").Id, "Unexpected Id");
+      Assert.AreEqual("main", ieframes.Frame("mainid").Name, "Unexpected name");
+    }
+    
+    [Test]
+    public void GetContentsFrameUsingFindById()
+    {
+      try
+      {
+        ieframes.Frame("contentsid").Link("googlelink");
+      }
+      catch (UnauthorizedAccessException)
+      {
+        Assert.Fail("UnauthorizedAccessException");
+      }
 
-			// Collection items by index
-			Assert.AreEqual(frameNameContents, frames[0].Name);
-			Assert.AreEqual(frameNameMain, frames[1].Name);
+      Assert.AreEqual("contentsid", ieframes.Frame("contentsid").Id, "Unexpected Id");
+      Assert.AreEqual("contents", ieframes.Frame("contentsid").Name, "Unexpected name");
+    }
+    
+    [Test]
+    public void GetGoogleFrameUsingFindByName()
+    {
+      try
+      {
+        ieframes.Frame(Find.ByName("main"));
+      }
+      catch (UnauthorizedAccessException)
+      {
+        Assert.Fail("UnauthorizedAccessException");
+      }
+    }
+    
+    [Test]
+    public void GetContentsFrameUsingFindByName()
+    {
+      try
+      {
+        ieframes.Frame(Find.ByName("contents"));
+      }
+      catch (UnauthorizedAccessException)
+      {
+        Assert.Fail("UnauthorizedAccessException");
+      }
+    }
+  }
+  
+  [TestFixture]
+  public class IFramesTests : WatiNTest
+  {
+    private IE ie;
 
-			IEnumerable frameEnumerable = frames;
-			IEnumerator frameEnumerator = frameEnumerable.GetEnumerator();
+    [TestFixtureSetUp]
+    public void Setup()
+    {
+      ie = new IE(IFramesMainURI);
+    }
 
-			// Collection iteration and comparing the result with Enumerator
-			int count = 0;
-			foreach (Frame frame in frames)
-			{
-				frameEnumerator.MoveNext();
-				object enumFrame = frameEnumerator.Current;
+    [TestFixtureTearDown]
+    public void tearDown()
+    {
+      ie.Close();
+    }
 
-				Assert.IsInstanceOfType(frame.GetType(), enumFrame, "Types are not the same");
-				Assert.AreEqual(frame.Html, ((Frame) enumFrame).Html, "foreach and IEnumator don't act the same.");
-				++count;
-			}
+    [Test, ExpectedException(typeof(FrameNotFoundException), ExpectedMessage = "Could not find a Frame or IFrame by id with value 'NonExistingIFrameID'")]
+    public void ExpectFrameNotFoundException()
+    {
+      ie.Frame(Find.ById("NonExistingIFrameID"));
+    }
 
-			Assert.IsFalse(frameEnumerator.MoveNext(), "Expected last item");
-			Assert.AreEqual(expectedFramesCount, count);
-		}
+    [Test]
+    public void LeftFrame()
+    {
+      Frame leftFrame = ie.Frame(Find.ByName("left"));
+      Assert.IsNotNull(leftFrame, "Frame expected");
+      Assert.AreEqual("left", leftFrame.Name);
+      Assert.AreEqual(null, leftFrame.Id);
 
-		[Test]
-		public void ShowFrames()
-		{
-			UtilityClass.DumpFrames(ie);
-		}
+      leftFrame = ie.Frame(Find.ByUrl(IFramesLeftURI));
+      Assert.AreEqual("left", leftFrame.Name);
+    }
+    
+    [Test]
+    public void MiddleFrame()
+    {
+      Frame middleFrame = ie.Frame(Find.ByName("middle"));
+      Assert.IsNotNull(middleFrame, "Frame expected");
+      Assert.AreEqual("middle", middleFrame.Name);
+      Assert.AreEqual("iframe2", middleFrame.Id);
 
-		private static void AssertFindFrame(IE ie, AttributeConstraint findBy, string expectedFrameName)
-		{
-			Frame frame = null;
-			string attributeName = findBy.AttributeName.ToLower();
-			if (attributeName == "href" || attributeName == "name")
-			{
-				frame = ie.Frame(findBy);
-			}
-			Assert.IsNotNull(frame, "Frame '" + findBy.Value + "' not found");
-			Assert.AreEqual(expectedFrameName, frame.Name, "Incorrect frame for " + findBy.ToString() + ", " + findBy.Value);
-		}
-	}
+      middleFrame = ie.Frame(Find.ByUrl(IFramesMiddleURI));
+      Assert.AreEqual("middle", middleFrame.Name);
+      
+      middleFrame = ie.Frame(Find.ById("iframe2"));
+      Assert.AreEqual("middle", middleFrame.Name);
+    }
+    
+    [Test]
+    public void RightFrame()
+    {
+      Frame rightFrame = ie.Frame(Find.ByUrl(IFramesRightURI));
+      Assert.IsNotNull(rightFrame, "Frame expected");
+      Assert.AreEqual(null, rightFrame.Name);
+      Assert.AreEqual(null, rightFrame.Id);
+    }
 
-	[TestFixture]
-	public class FramesetWithinFrameSetTests : WatiNTest
-	{
-		[Test]
-		public void FramesLength()
-		{
-			using (IE ieframes = new IE(FramesetWithinFramesetURI))
-			{
-				Assert.AreEqual(2, ieframes.Frames.Length);
-				Assert.AreEqual(2, ieframes.Frames[1].Frames.Length);
-			}
-		}
-	}
+    [Test]
+    public void Frames()
+    {
+      const int expectedFramesCount = 3;
+      FrameCollection frames = ie.Frames;
 
-	[TestFixture]
-	public class NoFramesTest : WatiNTest
-	{
-		[Test]
-		public void HasNoFrames()
-		{
-			using (IE iemain = new IE(MainURI))
-			{
-				Assert.AreEqual(0, iemain.Frames.Length);
-			}
-		}
-	}
+      Assert.AreEqual(expectedFramesCount, frames.Length, "Unexpected number of frames");
+
+      // Collection items by index
+      Assert.AreEqual("left", frames[0].Name);
+      Assert.AreEqual("middle", frames[1].Name);
+      Assert.AreEqual(null, frames[2].Name);
+
+      IEnumerable frameEnumerable = frames;
+      IEnumerator frameEnumerator = frameEnumerable.GetEnumerator();
+
+      // Collection iteration and comparing the result with Enumerator
+      int count = 0;
+      foreach (Frame frame in frames)
+      {
+        frameEnumerator.MoveNext();
+        object enumFrame = frameEnumerator.Current;
+        
+        Assert.IsInstanceOfType(frame.GetType(), enumFrame, "Types are not the same");
+        Assert.AreEqual(frame.Html, ((Frame)enumFrame).Html, "foreach and IEnumator don't act the same.");
+        ++count;
+      }
+      
+      Assert.IsFalse(frameEnumerator.MoveNext(), "Expected last item");
+      Assert.AreEqual(expectedFramesCount, count);
+    }
+    
+    [Test] //, Ignore("An Ebay IFrame never reaches complete status"), Category("InternetConnectionNeeded")]
+    public void EbayTest()
+    {
+      // ebay seems to embed some active-x(?) component
+      // which crashed the code in NativeMethods.EnumIWebBrowser2Interfaces
+      // Changed the code to release the pUnk.
+      // This test should ensure propper working untill I'm able to 
+      // create a better test.
+      using(new IE(EbayUrl))
+      {
+      }
+    }
+
+  }
 }

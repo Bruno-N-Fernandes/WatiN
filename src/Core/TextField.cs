@@ -16,318 +16,303 @@
 
 #endregion Copyright
 
-using System;
 using System.Collections;
 using mshtml;
+
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
 using WatiN.Core.Logging;
 
 namespace WatiN.Core
 {
-	/// <summary>
-	/// This class provides specialized functionality for a HTML input element of type 
-	/// text password textarea hidden and for a HTML textarea element.
-	/// </summary>
-	public class TextField : Element
-	{
-		private static ArrayList elementTags;
+  using System;
 
-		public static ArrayList ElementTags
-		{
-			get
-			{
-				if (elementTags == null)
-				{
-					elementTags = new ArrayList();
-					elementTags.Add(new ElementTag("input", "text password textarea hidden"));
-					elementTags.Add(new ElementTag("textarea"));
-				}
+  /// <summary>
+  /// This class provides specialized functionality for a HTML input element of type 
+  /// text password textarea hidden and for a HTML textarea element.
+  /// </summary>
+  public class TextField : Element
+  {
+    private static ArrayList elementTags;
 
-				return elementTags;
-			}
-		}
+    public static ArrayList ElementTags
+    {
+      get
+      {
+        if (elementTags == null)
+        {
+          elementTags = new ArrayList();
+          elementTags.Add(new ElementTag("input", "text password textarea hidden"));
+          elementTags.Add(new ElementTag("textarea"));
+        }
 
-		private ITextElement _textElement;
+        return elementTags;
+      }
+    }
 
-		public TextField(DomContainer ie, IHTMLElement element) : base(ie, element) {}
+    private ITextElement _textElement;
 
-		public TextField(DomContainer ie, ElementFinder finder) : base(ie, finder) {}
+    public TextField(DomContainer ie, IHTMLElement element) : base(ie, element)
+    {}
 
-		/// <summary>
-		/// Initialises a new instance of the <see cref="TextField"/> class based on <paramref name="element"/>.
-		/// </summary>
-		/// <param name="element">The element.</param>
-		public TextField(Element element) : base(element, ElementTags) {}
+    public TextField(DomContainer ie, ElementFinder finder) : base(ie, finder)
+    {}
 
-		private ITextElement textElement
-		{
-			get
-			{
-				if (_textElement == null)
-				{
-					if (ElementFinder.isInputElement(htmlElement.tagName))
-					{
-						_textElement = new TextFieldElement((IHTMLInputElement) HTMLElement);
-					}
-					else
-					{
-						_textElement = new TextAreaElement((IHTMLTextAreaElement) HTMLElement);
-					}
-				}
-				return _textElement;
-			}
-		}
+    /// <summary>
+    /// Initialises a new instance of the <see cref="TextField"/> class based on <paramref name="element"/>.
+    /// </summary>
+    /// <param name="element">The element.</param>
+    public TextField(Element element) : base(element, ElementTags)
+    {}
 
-		public int MaxLength
-		{
-			get { return textElement.MaxLength; }
-		}
+    private ITextElement textElement
+    {
+      get
+      {
+        if (_textElement == null)
+        {
+          if (ElementFinder.isInputElement(htmlElement.tagName))
+          {
+            _textElement = new TextFieldElement((IHTMLInputElement)HTMLElement);
+          }
+          else
+          {
+            _textElement = new TextAreaElement((IHTMLTextAreaElement)HTMLElement);
+          }
+        }
+        return _textElement;
+      }
+    }
+    
+    public int MaxLength
+    {
+      get { return textElement.MaxLength; }
+    }
 
-		public bool ReadOnly
-		{
-			get { return textElement.ReadOnly; }
-		}
+    public bool ReadOnly
+    {
+      get { return textElement.ReadOnly; }
+    }
 
-		public void TypeText(string value)
-		{
-			Logger.LogAction("Typing '" + value + "' into " + GetType().Name + " '" + ToString() + "'");
+    public void TypeText(string value)
+    {
+      Logger.LogAction("Typing '" + value + "' into " + GetType().Name + " '" + ToString() + "'");
 
-			TypeAppendClearText(value, false, false);
-		}
+      TypeAppendClearText(value, false, false);
+    }
 
-		public void AppendText(string value)
-		{
-			Logger.LogAction("Appending '" + value + "' to " + GetType().Name + " '" + ToString() + "'");
+    public void AppendText(string value)
+    {
+      Logger.LogAction("Appending '" + value + "' to " + GetType().Name + " '" + ToString() + "'");
 
-			TypeAppendClearText(value, true, false);
-		}
+      TypeAppendClearText(value, true, false);
+    }
 
-		public void Clear()
-		{
-			Logger.LogAction("Clearing " + GetType().Name + " '" + ToString() + "'");
+    public void Clear()
+    {
+      Logger.LogAction("Clearing " + GetType().Name + " '" + ToString() + "'");
 
-			TypeAppendClearText(null, false, true);
-		}
+      TypeAppendClearText(null, false, true);
+    }
 
-		private void TypeAppendClearText(string value, bool append, bool clear)
-		{
-			CheckIfTypingIsPossibleInThisTextField();
+    private void TypeAppendClearText(string value, bool append, bool clear)
+    {
+      if (!Enabled) { throw new ElementDisabledException(ToString()); }
+      if (ReadOnly) { throw new ElementReadOnlyException(ToString()); }
+      
+      if (value != null)
+      {
+        value = value.Replace(Environment.NewLine, "\r");
+      }
 
-			value = ReplaceNewLineWithCorrectCharacters(value);
+      Highlight(true);
+      Focus();
+      if (!append) Select();
+      if (!append) setValue("");
+      if (!append) KeyPress();
+      if (!clear) doKeyPress(value);
+      Highlight(false);
+      if (!append) Change();
+      try
+      {
+        if (!append) Blur();
+      }
+      catch {}
+    }
 
-			Highlight(true);
-			Focus();
-			if (!append) Select();
-			if (!append) setValue("");
-			if (!append) KeyPress();
-			if (!clear) doKeyPress(value);
-			Highlight(false);
-			if (!append) Change();
-			try
-			{
-				if (!append) Blur();
-			}
-			catch {}
-		}
+    public string Value
+    {
+      get { return textElement.Value; }
+      // Don't use this set property internally (in this class) but use setValue. 
+      set
+      {
+        Logger.LogAction("Setting " + GetType().Name + " '" + ToString() + "' to '" + value + "'");
 
-		private static string ReplaceNewLineWithCorrectCharacters(string value)
-		{
-			if (value != null)
-			{
-				value = value.Replace(Environment.NewLine, "\r");
-			}
-			return value;
-		}
+        setValue(value);
+      }
+    }
 
-		private void CheckIfTypingIsPossibleInThisTextField()
-		{
-			if (!Enabled)
-			{
-				throw new ElementDisabledException(ToString());
-			}
-			if (ReadOnly)
-			{
-				throw new ElementReadOnlyException(ToString());
-			}
-		}
+    /// <summary>
+    /// Returns the same as the Value property
+    /// </summary>
+    public override string Text
+    {
+      get
+      {
+        return Value;
+      }
+    }
 
-		public string Value
-		{
-			get { return textElement.Value; }
-			// Don't use this set property internally (in this class) but use setValue. 
-			set
-			{
-				Logger.LogAction("Setting " + GetType().Name + " '" + ToString() + "' to '" + value + "'");
+    public void Select()
+    {
+      textElement.Select();
+      FireEvent("onSelect");
+    }
 
-				setValue(value);
-			}
-		}
+    public override string ToString()
+    {
+      if (UtilityClass.IsNotNullOrEmpty(Title))
+      {
+        return Title;
+      }
+      if (UtilityClass.IsNotNullOrEmpty(Id))
+      {
+        return Id;
+      }
+      if (UtilityClass.IsNotNullOrEmpty(Name))
+      {
+        return Name;
+      }
+      return base.ToString ();
+    }
 
-		/// <summary>
-		/// Returns the same as the Value property
-		/// </summary>
-		public override string Text
-		{
-			get { return Value; }
-		}
+    public string Name
+    {
+      get
+      {
+        return textElement.Name;
+      }
+    }
 
-		public void Select()
-		{
-			textElement.Select();
-			FireEvent("onSelect");
-		}
+    private void setValue(string value)
+    {
+      textElement.SetValue(value);
+    }
 
-		public override string ToString()
-		{
-			if (UtilityClass.IsNotNullOrEmpty(Title))
-			{
-				return Title;
-			}
-			if (UtilityClass.IsNotNullOrEmpty(Id))
-			{
-				return Id;
-			}
-			if (UtilityClass.IsNotNullOrEmpty(Name))
-			{
-				return Name;
-			}
-			return base.ToString();
-		}
+    private void doKeyPress(string value)
+    {
+      bool doKeydown = ShouldEventBeFired(htmlElement.onkeydown);
+      bool doKeyPress = ShouldEventBeFired(htmlElement.onkeypress);
+      bool doKeyUp = ShouldEventBeFired(htmlElement.onkeyup);
 
-		public string Name
-		{
-			get { return textElement.Name; }
-		}
+      int length = value.Length;
+      if (MaxLength !=0 && length > MaxLength )
+      {
+        length = MaxLength;
+      }
 
-		private void setValue(string value)
-		{
-			textElement.SetValue(value);
-		}
+      for (int i = 0; i < length; i++)
+      {
+        //TODO: Make typing speed a variable
+        //        Thread.Sleep(0); 
 
-		private void doKeyPress(string value)
-		{
-			bool doKeydown = ShouldEventBeFired(htmlElement.onkeydown);
-			bool doKeyPress = ShouldEventBeFired(htmlElement.onkeypress);
-			bool doKeyUp = ShouldEventBeFired(htmlElement.onkeyup);
+        string subString = value.Substring(i, 1);
+        char character = char.Parse(subString);
+        
+        setValue(Value + subString);
 
-			int length = value.Length;
-			if (MaxLength != 0 && length > MaxLength)
-			{
-				length = MaxLength;
-			}
+        if (doKeydown) { KeyDown(character); }
+        if (doKeyPress) { KeyPress(character); }
+        if (doKeyUp) { KeyUp(character); }
+      }
+    }
 
-			for (int i = 0; i < length; i++)
-			{
-				//TODO: Make typing speed a variable
-				//        Thread.Sleep(0); 
+    private bool ShouldEventBeFired(Object value)
+    {
+      return (value != DBNull.Value);
+    }
 
-				string subString = value.Substring(i, 1);
-				char character = char.Parse(subString);
+    /// <summary>
+    /// Summary description for TextFieldElement.
+    /// </summary>
+    private class TextAreaElement : ITextElement
+    {
+      private IHTMLTextAreaElement htmlTextAreaElement;
+      
+      public TextAreaElement(IHTMLTextAreaElement htmlTextAreaElement)
+      {
+        this.htmlTextAreaElement = htmlTextAreaElement;
+      }
 
-				setValue(Value + subString);
+      public int MaxLength
+      {
+        get { return 0; }
+      }
 
-				if (doKeydown)
-				{
-					KeyDown(character);
-				}
-				if (doKeyPress)
-				{
-					KeyPress(character);
-				}
-				if (doKeyUp)
-				{
-					KeyUp(character);
-				}
-			}
-		}
+      public bool ReadOnly
+      {
+        get { return htmlTextAreaElement.readOnly; }
+      }
 
-		private bool ShouldEventBeFired(Object value)
-		{
-			return (value != DBNull.Value);
-		}
+      public string Value
+      {
+        get { return htmlTextAreaElement.value; } 
+      }
 
-		/// <summary>
-		/// Summary description for TextFieldElement.
-		/// </summary>
-		private class TextAreaElement : ITextElement
-		{
-			private IHTMLTextAreaElement htmlTextAreaElement;
+      public void Select()
+      {
+        htmlTextAreaElement.select();
+      }
 
-			public TextAreaElement(IHTMLTextAreaElement htmlTextAreaElement)
-			{
-				this.htmlTextAreaElement = htmlTextAreaElement;
-			}
+      public void SetValue(string value)
+      {
+        htmlTextAreaElement.value = value;
+      }
 
-			public int MaxLength
-			{
-				get { return 0; }
-			}
+      public string Name
+      {
+        get { return htmlTextAreaElement.name; }
+      }
+    }
 
-			public bool ReadOnly
-			{
-				get { return htmlTextAreaElement.readOnly; }
-			}
+    private class TextFieldElement : ITextElement
+    {
+      private IHTMLInputElement inputElement;
 
-			public string Value
-			{
-				get { return htmlTextAreaElement.value; }
-			}
+      public TextFieldElement(IHTMLInputElement htmlInputElement)
+      {
+        inputElement = htmlInputElement;
+      }
 
-			public void Select()
-			{
-				htmlTextAreaElement.select();
-			}
+      public int MaxLength
+      {
+        get { return inputElement.maxLength; }
+      }
 
-			public void SetValue(string value)
-			{
-				htmlTextAreaElement.value = value;
-			}
+      public bool ReadOnly
+      {
+        get { return inputElement.readOnly; }
+      }
 
-			public string Name
-			{
-				get { return htmlTextAreaElement.name; }
-			}
-		}
+      public string Value
+      {
+        get { return inputElement.value; } // Don't use this set property internally (in this class) but use setValue. 
+      }
 
-		private class TextFieldElement : ITextElement
-		{
-			private IHTMLInputElement inputElement;
+      public void Select()
+      {
+        inputElement.select();
+      }
 
-			public TextFieldElement(IHTMLInputElement htmlInputElement)
-			{
-				inputElement = htmlInputElement;
-			}
+      public void SetValue(string value)
+      {
+        inputElement.value = value;
+      }
 
-			public int MaxLength
-			{
-				get { return inputElement.maxLength; }
-			}
-
-			public bool ReadOnly
-			{
-				get { return inputElement.readOnly; }
-			}
-
-			public string Value
-			{
-				get { return inputElement.value; } // Don't use this set property internally (in this class) but use setValue. 
-			}
-
-			public void Select()
-			{
-				inputElement.select();
-			}
-
-			public void SetValue(string value)
-			{
-				inputElement.value = value;
-			}
-
-			public string Name
-			{
-				get { return inputElement.name; }
-			}
-		}
-	}
+      public string Name
+      {
+        get { return inputElement.name; }
+      }
+    }
+  }
 }
