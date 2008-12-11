@@ -16,11 +16,11 @@
 
 #endregion Copyright
 
+using System;
 using System.Text.RegularExpressions;
 using mshtml;
 using WatiN.Core.Comparers;
 using WatiN.Core.Interfaces;
-using WatiN.Core.InternetExplorer;
 
 namespace WatiN.Core.Constraints
 {
@@ -30,8 +30,8 @@ namespace WatiN.Core.Constraints
 	/// </summary>
 	public class TableRowAttributeConstraint : AttributeConstraint
 	{
-		private readonly int columnIndex;
-		private readonly ICompare containsText;
+		private int columnIndex;
+		private ICompare containsText;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TableRowAttributeConstraint"/> class.
@@ -68,26 +68,25 @@ namespace WatiN.Core.Constraints
 
 		public override bool Compare(IAttributeBag attributeBag)
 		{
-		    var elementAttributeBag = (ElementAttributeBag) attributeBag;
-		    var element = elementAttributeBag.Element;
-            var nativeElement = (IHTMLElement)element.NativeElement.Object;
+		    ElementAttributeBag elementAttributeBag = (ElementAttributeBag) attributeBag;
+		    IHTMLElement element = elementAttributeBag.IHTMLElement;
 			
-			if (IsTextContainedIn(element.Text))
+			if (IsTextContainedIn(element.innerText))
 			{
 				// Get all elements and filter this for TableCells
-                var tableRowElement = (IHTMLTableRow)nativeElement;
-				var tableCellElements = tableRowElement.cells;
+				IHTMLTableRow tableRowElement = (IHTMLTableRow)element;
+				IHTMLElementCollection tableCellElements = tableRowElement.cells;
 
 				if (tableCellElements.length - 1 >= columnIndex)
 				{
-                    var tableCell = (IHTMLTableCell)tableCellElements.item(columnIndex, null);
-				    var elementComparer = comparer as ICompareElement;
+                    IHTMLTableCell tableCell = (IHTMLTableCell)tableCellElements.item(columnIndex, null);
+				    ICompareElement elementComparer = comparer as ICompareElement;
                     
                     if (elementComparer != null)
                     {
-                        return elementComparer.Compare(new TableCell(elementAttributeBag.DomContainer, new IEElement(tableCell)));
+                        return elementComparer.Compare(new TableCell(elementAttributeBag.DomContainer, tableCell));
                     }
-				    return base.Compare(new ElementAttributeBag(elementAttributeBag.DomContainer, new IEElement(tableCell)));
+				    return base.Compare(new ElementAttributeBag(elementAttributeBag.DomContainer, (IHTMLElement) tableCell));
 				}
 			}
 

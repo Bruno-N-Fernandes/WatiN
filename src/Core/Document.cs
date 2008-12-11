@@ -21,11 +21,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Expando;
 using System.Text.RegularExpressions;
+using System.Threading;
 using mshtml;
 using WatiN.Core.Constraints;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
-using WatiN.Core.UtilityClasses;
 
 namespace WatiN.Core
 {
@@ -59,29 +59,29 @@ namespace WatiN.Core
 	public abstract class Document : IElementsContainer, IDisposable, IElementCollection
 	{
 		private DomContainer domContainer;
-		private INativeDocument _nativeDocument;
+		private IHTMLDocument2 htmlDocument;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="Document"/> class.
-		/// Mainly used by WatiN internally. You should override NativeDocument
+		/// Mainly used by WatiN internally. You should override HtmlDocument
 		/// and set DomContainer before accessing any method or property of 
 		/// this class.
 		/// </summary>
-		protected Document() {}
+		public Document() {}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="Document"/> class.
 		/// Mainly used by WatiN internally.
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
-		/// <param name="nativeDocument">The HTML document.</param>
-		protected Document(DomContainer domContainer, INativeDocument nativeDocument)
+		/// <param name="htmlDocument">The HTML document.</param>
+		public Document(DomContainer domContainer, IHTMLDocument2 htmlDocument)
 		{
 			ArgumentRequired(domContainer, "domContainer");
-			ArgumentRequired(nativeDocument, "nativeDocument");
+			ArgumentRequired(htmlDocument, "htmlDocument");
 
 			DomContainer = domContainer;
-			_nativeDocument = nativeDocument;
+			this.htmlDocument = htmlDocument;
 		}
 
 		public void Dispose()
@@ -92,17 +92,18 @@ namespace WatiN.Core
 		protected virtual void Dispose(bool disposing)
 		{
 			DomContainer = null;
-			_nativeDocument = null;
+			htmlDocument = null;
 		}
 
 		/// <summary>
-        /// Gives access to the wrapped INativeDocument interface. This makes it
-		/// possible to get even more control of the webpage by using wrapped element
+		/// Gives access to the wrapped IHTMLDocument2 interface. This makes it
+		/// possible to get even more control of the webpage by using the MSHTML
+		/// Dom objectmodel.
 		/// </summary>
-		/// <value>The NativeDocument.</value>
-		public virtual INativeDocument NativeDocument
+		/// <value>The HTML document.</value>
+		public virtual IHTMLDocument2 HtmlDocument
 		{
-			get { return _nativeDocument; }
+			get { return htmlDocument; }
 		}
 
 		/// <summary>
@@ -113,19 +114,13 @@ namespace WatiN.Core
 		{
 			get
 			{
-			    return Body != null ? Body.OuterHtml : null;
+				IHTMLElement body = HtmlDocument.body;
+
+				if (body == null) return null;
+
+				return body.outerHTML;
 			}
 		}
-
-	    private Element Body
-	    {
-	        get
-	        {
-                var body = NativeDocument.Body;
-                return body != null ? new Element(DomContainer, body) : null;
-
-	        }
-	    }
 
 		/// <summary>
 		/// Gets the inner text of the Body part of the webpage.
@@ -135,7 +130,11 @@ namespace WatiN.Core
 		{
 			get
 			{
-				return Body != null ? Body.Text : null;
+				IHTMLElement body = HtmlDocument.body;
+
+				if (body == null) return null;
+
+				return body.innerText;
 			}
 		}
 
@@ -166,7 +165,7 @@ namespace WatiN.Core
 		/// </example>
 		public Uri Uri
 		{
-			get { return new Uri(NativeDocument.Url); }
+			get { return new Uri(HtmlDocument.url); }
 		}
 
 		/// <summary>
@@ -196,7 +195,7 @@ namespace WatiN.Core
 		/// </example>
 		public string Url
 		{
-			get { return NativeDocument.Url; }
+			get { return HtmlDocument.url; }
 		}
 
 		/// <summary>
@@ -208,7 +207,7 @@ namespace WatiN.Core
 		/// </returns>
 		public bool ContainsText(string text)
 		{
-			var innertext = Text;
+			string innertext = Text;
 
 			if (innertext == null) return false;
 
@@ -224,9 +223,11 @@ namespace WatiN.Core
 		/// </returns>
 		public bool ContainsText(Regex regex)
 		{
-			var innertext = Text;
+			string innertext = Text;
 
-            return innertext != null && (regex.Match(innertext).Success);
+			if (innertext == null) return false;
+
+			return (regex.Match(innertext).Success);
 		}
 
 
@@ -253,16 +254,20 @@ namespace WatiN.Core
         /// </returns>
         public void WaitUntilContainsText(string text, int timeOut)
         {
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(timeOut)
+            SimpleTimer timer = new SimpleTimer(timeOut);
+
+            do
             {
-                SleepTime = 50,
-                ExceptionMessage = () => string.Format("waiting {0} seconds for document to contain text '{1}'.", Settings.WaitUntilExistsTimeOut, text)
-            };
-            tryActionUntilTimeOut.Try(() => ContainsText(text));
+                if (ContainsText(text)) { return; }
+
+                Thread.Sleep(50);
+            } while (!timer.Elapsed);
+
+            throw new WatiN.Core.Exceptions.TimeoutException(string.Format("waiting {0} seconds for document to contain text '{1}'.", Settings.WaitUntilExistsTimeOut, text));
         }
 
         /// <summary>
-        /// Waits until the <paramref name="regex" /> matches some text inside the HTML Body element.
+        /// Waits until the <paramref name="regex" /> matches some text inside the HTML Body element contains the given <paramref name="text" />.
         /// Will time out after <see name="Settings.WaitUntilExistsTimeOut" />
         /// </summary>
         /// <param name="regex">The regular expression to match with.</param>
@@ -275,7 +280,7 @@ namespace WatiN.Core
         }
 
 	    /// <summary>
-        /// Waits until the <paramref name="regex" /> matches some text inside the HTML Body element.
+        /// Waits until the <paramref name="regex" /> matches some text inside the HTML Body element contains the given <paramref name="text" />.
         /// </summary>
         /// <param name="regex">The regular expression to match with.</param>
         /// <param name="timeOut">The number of seconds to wait</param>
@@ -284,12 +289,16 @@ namespace WatiN.Core
         /// </returns>
         public void WaitUntilContainsText(Regex regex, int timeOut)
         {
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(timeOut)
+            SimpleTimer timer = new SimpleTimer(timeOut);
+
+            do
             {
-                SleepTime = 50,
-                ExceptionMessage = () => string.Format("waiting {0} seconds for document to contain regex '{1}'.", Settings.WaitUntilExistsTimeOut, regex)
-            };
-            tryActionUntilTimeOut.Try(() => ContainsText(regex));
+                if (ContainsText(regex)) { return; }
+
+                Thread.Sleep(50);
+            } while (!timer.Elapsed);
+
+            throw new WatiN.Core.Exceptions.TimeoutException(string.Format("waiting {0} seconds for document to contain regex '{1}'.", Settings.WaitUntilExistsTimeOut, regex));
         }
 
 		/// <summary>
@@ -299,7 +308,7 @@ namespace WatiN.Core
 		/// <returns>The matching text, or null if none.</returns>
 		public string FindText(Regex regex)
 		{
-			var match = regex.Match(Text);
+			Match match = regex.Match(Text);
 
 			return match.Success ? match.Value : null;
 		}
@@ -310,7 +319,7 @@ namespace WatiN.Core
 		/// <value>The title.</value>
 		public string Title
 		{
-			get { return NativeDocument.Title; }
+			get { return HtmlDocument.title; }
 		}
 
 		/// <summary>
@@ -321,10 +330,12 @@ namespace WatiN.Core
 		{
 			get
 			{
-				var activeElement = NativeDocument.ActiveElement;
-			    if (activeElement == null) return null;
-			    
-                return TypedElementFactory.CreateTypedElement(domContainer, domContainer.NativeBrowser.CreateElement(activeElement));
+				IHTMLElement activeElement = HtmlDocument.activeElement;
+				if (activeElement != null)
+				{
+                    return TypedElementFactory.CreateTypedElement(domContainer, domContainer.NativeBrowser.CreateElement(activeElement));
+				}
+				return null;
 			}
 		}
 
@@ -363,7 +374,7 @@ namespace WatiN.Core
 		/// </summary>
 		public FrameCollection Frames
 		{
-			get { return new FrameCollection(DomContainer, NativeDocument); }
+			get { return new FrameCollection(DomContainer, HtmlDocument); }
 		}
 
 		#region IElementsContainer
@@ -383,10 +394,12 @@ namespace WatiN.Core
 			return ElementsSupport.Area(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public Area Area(Predicate<Area> predicate)
 	    {
 	        return Area(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public AreaCollection Areas
 		{
@@ -408,12 +421,13 @@ namespace WatiN.Core
 			return ElementsSupport.Button(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public Button Button(Predicate<Button> predicate)
 	    {
 	        return Button(Find.ByElement(predicate));
 	    }
-
-        public ButtonCollection Buttons
+#endif
+	    public ButtonCollection Buttons
 		{
 			get { return ElementsSupport.Buttons(DomContainer, this); }
 		}
@@ -433,10 +447,12 @@ namespace WatiN.Core
 			return ElementsSupport.CheckBox(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public CheckBox CheckBox(Predicate<CheckBox> predicate)
 	    {
 	        return CheckBox(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public CheckBoxCollection CheckBoxes
 		{
@@ -458,10 +474,13 @@ namespace WatiN.Core
 			return ElementsSupport.Element(DomContainer, findBy, this);
         }
 
+
+#if !NET11
         public Element Element(Predicate<Element> predicate)
 	    {
 	        return Element(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public Element Element(string tagname, BaseConstraint findBy, params string[] inputtypes)
 		{
@@ -488,10 +507,12 @@ namespace WatiN.Core
 			return ElementsSupport.FileUpload(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public FileUpload FileUpload(Predicate<FileUpload> predicate)
 	    {
 	        return FileUpload(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public FileUploadCollection FileUploads
 		{
@@ -513,10 +534,12 @@ namespace WatiN.Core
 			return ElementsSupport.Form(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Form Form(Predicate<Form> predicate)
 	    {
 	        return Form(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public FormCollection Forms
 		{
@@ -538,10 +561,12 @@ namespace WatiN.Core
 			return ElementsSupport.Label(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public Label Label(Predicate<Label> predicate)
 	    {
 	        return Label(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public LabelCollection Labels
 		{
@@ -563,10 +588,12 @@ namespace WatiN.Core
 			return ElementsSupport.Link(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Link Link(Predicate<Link> predicate)
 	    {
 	        return Link(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public LinkCollection Links
 		{
@@ -588,10 +615,12 @@ namespace WatiN.Core
 			return ElementsSupport.Para(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Para Para(Predicate<Para> predicate)
 	    {
 	        return Para(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public ParaCollection Paras
 		{
@@ -613,10 +642,12 @@ namespace WatiN.Core
 			return ElementsSupport.RadioButton(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public RadioButton RadioButton(Predicate<RadioButton> predicate)
 	    {
 	        return RadioButton(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public RadioButtonCollection RadioButtons
 		{
@@ -638,10 +669,12 @@ namespace WatiN.Core
 			return ElementsSupport.SelectList(DomContainer, findBy, this);
 		}
 
+#if !NET11
 	    public SelectList SelectList(Predicate<SelectList> predicate)
 	    {
 	        return SelectList(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public SelectListCollection SelectLists
 		{
@@ -663,10 +696,12 @@ namespace WatiN.Core
 			return ElementsSupport.Table(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Table Table(Predicate<Table> predicate)
 	    {
 	        return Table(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public TableCollection Tables
 		{
@@ -688,10 +723,12 @@ namespace WatiN.Core
 			return ElementsSupport.TableBody(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public TableBody TableBody(Predicate<TableBody> predicate)
 	    {
 	        return TableBody(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public TableBodyCollection TableBodies
 		{
@@ -713,10 +750,12 @@ namespace WatiN.Core
 			return ElementsSupport.TableCell(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public TableCell TableCell(Predicate<TableCell> predicate)
 	    {
 	        return TableCell(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public TableCell TableCell(string elementId, int index)
 		{
@@ -748,10 +787,12 @@ namespace WatiN.Core
 			return ElementsSupport.TableRow(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public TableRow TableRow(Predicate<TableRow> predicate)
 	    {
 	        return TableRow(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public TableRowCollection TableRows
 		{
@@ -773,12 +814,13 @@ namespace WatiN.Core
 			return ElementsSupport.TextField(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public TextField TextField(Predicate<TextField> predicate)
         {
             return TextField(Find.ByElement(predicate));
         }
-
-        public TextFieldCollection TextFields
+#endif
+		public TextFieldCollection TextFields
 		{
 			get { return ElementsSupport.TextFields(DomContainer, this); }
 		}
@@ -798,10 +840,12 @@ namespace WatiN.Core
 			return ElementsSupport.Span(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Span Span(Predicate<Span> predicate)
 	    {
 	        return Span(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public SpanCollection Spans
 		{
@@ -823,10 +867,12 @@ namespace WatiN.Core
 			return ElementsSupport.Div(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Div Div(Predicate<Div> predicate)
 	    {
 	        return Div(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public DivCollection Divs
 		{
@@ -848,10 +894,12 @@ namespace WatiN.Core
 			return ElementsSupport.Image(DomContainer, findBy, this);
 		}
 
+#if !NET11
         public Image Image(Predicate<Image> predicate)
 	    {
 	        return Image(Find.ByElement(predicate));
 	    }
+#endif
 
 	    public ImageCollection Images
 		{
@@ -866,13 +914,13 @@ namespace WatiN.Core
 			set { domContainer = value; }
 		}
 
-		object IElementCollection.Elements
+		IHTMLElementCollection IElementCollection.Elements
 		{
 			get
 			{
 				try
 				{
-					return ((IHTMLDocument2)NativeDocument.Object).all;
+					return HtmlDocument.all;
 				}
 				catch
 				{
@@ -905,7 +953,7 @@ namespace WatiN.Core
 		/// <param name="language">The language.</param>
 		public void RunScript(string scriptCode, string language)
 		{
-			UtilityClass.RunScript(scriptCode, language, ((IHTMLDocument2)NativeDocument.Object).parentWindow);
+			UtilityClass.RunScript(scriptCode, language, HtmlDocument.parentWindow);
 		}
 
 		/// <summary>
@@ -938,7 +986,7 @@ namespace WatiN.Core
 			const string resultPropertyName = "___expressionResult___";
 			const string errorPropertyName = "___expressionError___";
 
-			var exprWithAssignment = "try {\n"
+			string exprWithAssignment = "try {\n"
 			                            + "document." + resultPropertyName + "= String(eval('" + javaScriptCode.Replace("'", "\\'") + "'))\n"
 			                            + "} catch (error) {\n"
 			                            + "document." + errorPropertyName + "= 'message' in error ? error.name + ': ' + error.message : String(error)\n"
@@ -948,7 +996,7 @@ namespace WatiN.Core
 			RunScript(exprWithAssignment);
 
 			// See if an error occured.
-			var error = GetPropertyValue(errorPropertyName);
+			string error = GetPropertyValue(errorPropertyName);
 			if (error != null)
 			{
 				throw new JavaScriptException(error);
@@ -960,9 +1008,9 @@ namespace WatiN.Core
 
 		private string GetPropertyValue(string propertyName)
 		{
-			var domDocumentExpando = (IExpando) NativeDocument.Object;
+			IExpando domDocumentExpando = (IExpando) HtmlDocument;
 
-			var errorProperty = domDocumentExpando.GetProperty(propertyName, BindingFlags.Default);
+			PropertyInfo errorProperty = domDocumentExpando.GetProperty(propertyName, BindingFlags.Default);
 			if (errorProperty != null)
 			{
 				try

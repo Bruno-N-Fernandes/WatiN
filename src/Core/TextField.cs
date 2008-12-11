@@ -29,7 +29,11 @@ namespace WatiN.Core
 	/// This class provides specialized functionality for a HTML input element of type 
 	/// text password textarea hidden and for a HTML textarea element.
 	/// </summary>
+#if NET11
+	public class TextField : Element
+#else 
     public class TextField : Element<TextField>
+#endif
 	{
 		private static ArrayList elementTags;
 
@@ -39,11 +43,9 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList
-					                  {
-					                      new ElementTag("input", "text password textarea hidden"),
-					                      new ElementTag("textarea")
-					                  };
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("input", "text password textarea hidden"));
+					elementTags.Add(new ElementTag("textarea"));
 				}
 
 				return elementTags;
@@ -52,7 +54,8 @@ namespace WatiN.Core
 
 		private ITextElement _textElement;
 
-		public TextField(DomContainer domContainer, INativeElement element) : base(domContainer, element) { }
+		public TextField(DomContainer domContainer, IHTMLElement element) :
+            base(domContainer, domContainer.NativeBrowser.CreateElement(element)) { }
 
 		public TextField(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder) {}
 
@@ -68,18 +71,16 @@ namespace WatiN.Core
 			{
 				if (_textElement == null)
 				{
-                    var nativeElement = NativeElement.Object;
-
-				    if (ElementTag.IsAnInputElement(TagName))
+					if (ElementTag.IsAnInputElement(htmlElement.tagName))
 					{
-						_textElement = new TextFieldElement((IHTMLInputElement) nativeElement);
+						_textElement = new TextFieldElement((IHTMLInputElement) HTMLElement);
 					}
 					else
 					{
-						_textElement = new TextAreaElement((IHTMLTextAreaElement) nativeElement);
+						_textElement = new TextAreaElement((IHTMLTextAreaElement) HTMLElement);
 					}
 				}
-			    return _textElement;
+				return _textElement;
 			}
 		}
 
@@ -192,8 +193,11 @@ namespace WatiN.Core
 			{
 				return Id;
 			}
-
-			return UtilityClass.IsNotNullOrEmpty(Name) ? Name : base.ToString();
+			if (UtilityClass.IsNotNullOrEmpty(Name))
+			{
+				return Name;
+			}
+			return base.ToString();
 		}
 
 		public string Name
@@ -208,25 +212,23 @@ namespace WatiN.Core
 
 		private void doKeyPress(string value)
 		{
-            var element = (IHTMLElement)NativeElement.Object;
+			bool doKeydown = ShouldEventBeFired(htmlElement.onkeydown);
+			bool doKeyPress = ShouldEventBeFired(htmlElement.onkeypress);
+			bool doKeyUp = ShouldEventBeFired(htmlElement.onkeyup);
 
-            var doKeydown = ShouldEventBeFired(element.onkeydown);
-            var doKeyPress = ShouldEventBeFired(element.onkeypress);
-            var doKeyUp = ShouldEventBeFired(element.onkeyup);
-
-			var length = value.Length;
+			int length = value.Length;
 			if (MaxLength != 0 && length > MaxLength)
 			{
 				length = MaxLength;
 			}
 
-			for (var i = 0; i < length; i++)
+			for (int i = 0; i < length; i++)
 			{
 				//TODO: Make typing speed a variable
 				//        Thread.Sleep(0); 
 
-				var subString = value.Substring(i, 1);
-				var character = char.Parse(subString);
+				string subString = value.Substring(i, 1);
+				char character = char.Parse(subString);
 
 				setValue(Value + subString);
 
@@ -245,7 +247,7 @@ namespace WatiN.Core
 			}
 		}
 
-		private static bool ShouldEventBeFired(Object value)
+		private bool ShouldEventBeFired(Object value)
 		{
 			return (value != DBNull.Value);
 		}
@@ -255,7 +257,7 @@ namespace WatiN.Core
 		/// </summary>
 		private class TextAreaElement : ITextElement
 		{
-			private readonly IHTMLTextAreaElement htmlTextAreaElement;
+			private IHTMLTextAreaElement htmlTextAreaElement;
 
 			public TextAreaElement(IHTMLTextAreaElement htmlTextAreaElement)
 			{
@@ -295,7 +297,7 @@ namespace WatiN.Core
 
 		private class TextFieldElement : ITextElement
 		{
-			private readonly IHTMLInputElement inputElement;
+			private IHTMLInputElement inputElement;
 
 			public TextFieldElement(IHTMLInputElement htmlInputElement)
 			{
@@ -333,7 +335,7 @@ namespace WatiN.Core
 			}
 		}
 
-		internal new static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
 			return new TextField(domContainer, element);
 		}

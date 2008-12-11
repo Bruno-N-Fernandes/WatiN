@@ -17,8 +17,8 @@
 #endregion Copyright
 
 using System;
-using Moq;
 using NUnit.Framework;
+using Rhino.Mocks;
 using WatiN.Core.Constraints;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
@@ -28,83 +28,86 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
     [TestFixture]
     public class FindByMultipleAttributeConstraintsTests
     {
+        private MockRepository mocks;
+        private IAttributeBag mockAttributeBag;
+
+        [SetUp]
+        public void Setup()
+        {
+            mocks = new MockRepository();
+            mockAttributeBag = (IAttributeBag) mocks.CreateMock(typeof (IAttributeBag));
+        }
+
         [Test]
         public void AndTrue()
         {
-            // GIVEN
-            var mockAttributeBag = new Mock<IAttributeBag>();
+            BaseConstraint findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
 
-            var findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("X");
+            Expect.Call(mockAttributeBag.GetValue("value")).Return("Cancel");
 
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("X");
-            mockAttributeBag.Expect(bag => bag.GetValue("value")).Returns("Cancel");
+            mocks.ReplayAll();
 
-            // WHEN
-            var compare = findBy.Compare(mockAttributeBag.Object);
-            
-            // THEN
-            Assert.IsTrue(compare);
+            Assert.IsTrue(findBy.Compare(mockAttributeBag));
+
+            mocks.VerifyAll();
         }
 
         [Test]
         public void AndFalseFirstSoSecondPartShouldNotBeEvaluated()
         {
-            // GIVEN
-            var mockAttributeBag = new Mock<IAttributeBag>();
+            BaseConstraint findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
 
-            var findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("Y");
 
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("Y");
+            mocks.ReplayAll();
 
-            // WHEN
-            var compare = findBy.Compare(mockAttributeBag.Object);
+            Assert.IsFalse(findBy.Compare(mockAttributeBag));
 
-            // THEN
-            Assert.IsFalse(compare);
+            mocks.VerifyAll();
         }
 
         [Test]
         public void AndFalseSecond()
         {
-            var findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
+            BaseConstraint findBy = Find.ByName("X").And(Find.ByValue("Cancel"));
 
-            var attributeBag = new MockAttributeBag("name", "X");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "X");
             attributeBag.Add("value", "OK");
-            
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
 
         [Test]
         public void OrFirstTrue()
         {
-            var findBy = Find.ByName("X").Or(Find.ByName("Y"));
-            var attributeBag = new MockAttributeBag("name", "X");
+            BaseConstraint findBy = Find.ByName("X").Or(Find.ByName("Y"));
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "X");
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
 
         [Test]
         public void OrSecondTrue()
         {
-            var findBy = Find.ByName("X").Or(Find.ByName("Y"));
-            var attributeBag = new MockAttributeBag("name", "Y");
+            BaseConstraint findBy = Find.ByName("X").Or(Find.ByName("Y"));
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Y");
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
 
         [Test]
         public void OrFalse()
         {
-            var findBy = Find.ByName("X").Or(Find.ByName("Y"));
-            var attributeBag = new MockAttributeBag("name", "Z");
+            BaseConstraint findBy = Find.ByName("X").Or(Find.ByName("Y"));
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
 
         [Test]
         public void AndOr()
         {
-            var findByNames = Find.ByName("X").Or(Find.ByName("Y"));
-            var findBy = Find.ByValue("Cancel").And(findByNames);
+            BaseConstraint findByNames = Find.ByName("X").Or(Find.ByName("Y"));
+            BaseConstraint findBy = Find.ByValue("Cancel").And(findByNames);
 
-            var attributeBag = new MockAttributeBag("name", "X");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "X");
             attributeBag.Add("value", "Cancel");
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
@@ -112,9 +115,9 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void AndOrThroughOperatorOverloads()
         {
-            var findBy = Find.ByName("X") & Find.ByValue("Cancel") | (Find.ByName("Z") & Find.ByValue("Cancel"));
+            BaseConstraint findBy = Find.ByName("X") & Find.ByValue("Cancel") | (Find.ByName("Z") & Find.ByValue("Cancel"));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             attributeBag.Add("value", "OK");
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
@@ -130,8 +133,7 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         {
             BaseConstraint findBy = new IndexConstraint(0);
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsTrue(findBy.Compare(attributeBag));
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
@@ -141,8 +143,7 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         {
             BaseConstraint findBy = new IndexConstraint(2);
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsTrue(findBy.Compare(attributeBag));
@@ -152,10 +153,9 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void OccurenceAndTrue()
         {
-            var findBy = new IndexConstraint(1).And(Find.ByName("Z"));
+            BaseConstraint findBy = new IndexConstraint(1).And(Find.ByName("Z"));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
@@ -163,13 +163,12 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void OccurenceOr()
         {
-            var findBy = new IndexConstraint(2).Or(Find.ByName("Z"));
+            BaseConstraint findBy = new IndexConstraint(2).Or(Find.ByName("Z"));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsTrue(findBy.Compare(attributeBag));
 
             attributeBag = new MockAttributeBag("name", "y");
-            
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
@@ -177,10 +176,9 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void OccurenceAndFalse()
         {
-            var findBy = new IndexConstraint(1).And(Find.ByName("Y"));
+            BaseConstraint findBy = new IndexConstraint(1).And(Find.ByName("Y"));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
@@ -188,10 +186,9 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void TrueAndOccurence()
         {
-            var findBy = Find.ByName("Z").And(new IndexConstraint(1));
+            BaseConstraint findBy = Find.ByName("Z").And(new IndexConstraint(1));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
@@ -199,58 +196,54 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test]
         public void FalseAndOccurence()
         {
-            var findBy = Find.ByName("Y").And(new IndexConstraint(1));
+            BaseConstraint findBy = Find.ByName("Y").And(new IndexConstraint(1));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
-            
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsFalse(findBy.Compare(attributeBag));
         }
 
         [Test]
-        public void TrueAndIndexConstraintAndTrue()
+        public void TrueAndOccurenceAndTrue()
         {
-            var mockAttributeBag = new Mock<IAttributeBag>();
+            BaseConstraint findBy = Find.ByName("Z").And(new IndexConstraint(1)).And(Find.ByValue("text"));
 
-            var findBy = Find.ByName("Z").And(new IndexConstraint(1)).And(Find.ByValue("text"));
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("Z");
+            Expect.Call(mockAttributeBag.GetValue("value")).Return("text");
 
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("Z");
-            mockAttributeBag.Expect(bag => bag.GetValue("value")).Returns("text");
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("Z");
+            Expect.Call(mockAttributeBag.GetValue("value")).Return("some other text");
 
-            Assert.IsFalse(findBy.Compare(mockAttributeBag.Object));
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("Y");
 
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("Z");
-            mockAttributeBag.Expect(bag => bag.GetValue("value")).Returns("some other text");
+            Expect.Call(mockAttributeBag.GetValue("name")).Return("Z");
+            Expect.Call(mockAttributeBag.GetValue("value")).Return("text");
 
-            Assert.IsFalse(findBy.Compare(mockAttributeBag.Object));
+            mocks.ReplayAll();
 
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("Y");
+            Assert.IsFalse(findBy.Compare(mockAttributeBag));
+            Assert.IsFalse(findBy.Compare(mockAttributeBag));
+            Assert.IsFalse(findBy.Compare(mockAttributeBag));
+            Assert.IsTrue(findBy.Compare(mockAttributeBag));
 
-            Assert.IsFalse(findBy.Compare(mockAttributeBag.Object));
-
-            mockAttributeBag.Expect(bag => bag.GetValue("name")).Returns("Z");
-            mockAttributeBag.Expect(bag => bag.GetValue("value")).Returns("text");
-
-            Assert.IsTrue(findBy.Compare(mockAttributeBag.Object));
-
-            mockAttributeBag.VerifyAll();
+            mocks.VerifyAll();
         }
 
         [Test]
         public void OccurenceAndOrWithOrTrue()
         {
-            var findBy = new IndexConstraint(2).And(Find.ByName("Y")).Or(Find.ByName("Z"));
+            BaseConstraint findBy = new IndexConstraint(2).And(Find.ByName("Y")).Or(Find.ByName("Z"));
 
-            var attributeBag = new MockAttributeBag("name", "Z");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Z");
             Assert.IsTrue(findBy.Compare(attributeBag));
         }
 
         [Test]
         public void OccurenceAndOrWithAndTrue()
         {
-            var findBy = new IndexConstraint(2).And(Find.ByName("Y")).Or(Find.ByName("Z"));
+            BaseConstraint findBy = new IndexConstraint(2).And(Find.ByName("Y")).Or(Find.ByName("Z"));
 
-            var attributeBag = new MockAttributeBag("name", "Y");
+            MockAttributeBag attributeBag = new MockAttributeBag("name", "Y");
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsFalse(findBy.Compare(attributeBag));
             Assert.IsTrue(findBy.Compare(attributeBag));
@@ -260,16 +253,14 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
         [Test, ExpectedException(typeof (ReEntryException))]
         public void RecusiveCallExceptionExpected()
         {
-            var mockAttributeBag = new Mock<IAttributeBag>();
-            
             BaseConstraint findBy = Find.By("tag", "value");
             findBy.Or(findBy);
 
-            mockAttributeBag.Expect(bag => bag.GetValue("tag")).Returns("val");
+            Expect.Call(mockAttributeBag.GetValue("tag")).Return("val").Repeat.AtLeastOnce();
 
-            findBy.Compare(mockAttributeBag.Object);
-
-            mockAttributeBag.VerifyAll();
+            mocks.ReplayAll();
+            findBy.Compare(mockAttributeBag);
+            mocks.VerifyAll();
         }
     }
 }

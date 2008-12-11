@@ -50,63 +50,33 @@ namespace WatiN.Core
 			_domContainer = domContainer;
 		}
 
-        /// <summary>
-        /// Captures an image of the current page on the current browser via _domContainer to disk
-        /// </summary>
-        /// <param name="filename"></param>
-        /// <param name="writeUrl"></param>
-        /// <param name="showGuides"></param>
-        /// <param name="scalePercentage">
-        /// </param>
-        /// <param name="quality">
-        /// 0-100 - The Quality category specifies the level of compression for an image. When used to construct an 
-        /// EncoderParameter, the range of useful values for the quality category is from 0 to 100. The lower the number specified, 
-        /// the higher the compression and therefore the lower the quality of the image. Zero would give you the lowest quality image and 
-        /// 100 the highest.
-        /// </param>
 		public void CaptureWebPageToFile(string filename, bool writeUrl, bool showGuides, int scalePercentage, int quality)
 		{
-			if (string.IsNullOrEmpty(filename)) throw new ArgumentNullException(filename);
-
-            var stream = new FileStream(filename, FileMode.Create);
-            var imagetype = GetImagetype(filename);
-
-            CaptureWebPageToFile(stream, imagetype, writeUrl, showGuides, scalePercentage, quality);
-			
-            stream.Flush();
+			Stream stream = new FileStream(filename, FileMode.Create);
+			CaptureWebPageToFile(stream, Path.GetExtension(filename), writeUrl, showGuides, scalePercentage, quality);
+			stream.Flush();
 			stream.Close();
 		}
 
-	    private static string GetImagetype(string filename)
-	    {
-	        var extension = Path.GetExtension(filename);
-            return string.IsNullOrEmpty(extension) ? string.Empty : extension.Substring(1);
-	    }
-
-	    public virtual void CaptureWebPageToFile(Stream stream, string imagetype, bool writeUrl, bool showGuides, int scalePercentage, int quality)
+		public void CaptureWebPageToFile(Stream stream, string imagetype, bool writeUrl, bool showGuides, int scalePercentage, int quality)
 		{
-			var finalImage = CaptureWebPageImage(writeUrl, showGuides, scalePercentage);
-			var eps = GetEncoderParams(quality);
-			var ici = GetCodec(imagetype);
+			System.Drawing.Image finalImage = CaptureWebPageImage(writeUrl, showGuides, scalePercentage);
+			EncoderParameters eps = GetEncoderParams(quality);
+			ImageCodecInfo ici = GetCodec(imagetype);
 
-			SaveImage(finalImage, stream, ici, eps);
+			finalImage.Save(stream, ici, eps);
 		}
 
-	    protected virtual void SaveImage(System.Drawing.Image finalImage, Stream stream, ImageCodecInfo ici, EncoderParameters eps)
-	    {
-	        finalImage.Save(stream, ici, eps);
-	    }
-
-	    public System.Drawing.Image CaptureWebPageImage(bool writeUrl, bool showGuides, int scalePercentage)
+		public System.Drawing.Image CaptureWebPageImage(bool writeUrl, bool showGuides, int scalePercentage)
 		{
-			return CaptureWebPageImage(_domContainer.hWnd, (IHTMLDocument2) _domContainer.NativeDocument.Object, writeUrl, showGuides, scalePercentage);
+			return CaptureWebPageImage(_domContainer.hWnd, _domContainer.HtmlDocument, writeUrl, showGuides, scalePercentage);
 		}
 
 		private static System.Drawing.Image CaptureWebPageImage(IntPtr browserHWND, IHTMLDocument2 myDoc, bool writeUrl, bool showGuides, int scalePercentage)
 		{
 			//URL Location
-			var URLExtraHeight = 0;
-			var URLExtraLeft = 0;
+			int URLExtraHeight = 0;
+			int URLExtraLeft = 0;
 
 			//Adjustment variable for capture size.
 			if (writeUrl)
@@ -125,25 +95,26 @@ namespace WatiN.Core
 			setDocumentAttribute(myDoc, "scroll", "yes");
 
 			//Get Browser Window Height
-			var heightsize = (int) getDocumentAttribute(myDoc, "scrollHeight");
-			var widthsize = (int) getDocumentAttribute(myDoc, "scrollWidth");
+			int heightsize = (int) getDocumentAttribute(myDoc, "scrollHeight");
+			int widthsize = (int) getDocumentAttribute(myDoc, "scrollWidth");
 
 			//Get Screen Height
-			var screenHeight = (int) getDocumentAttribute(myDoc, "clientHeight");
-			var screenWidth = (int) getDocumentAttribute(myDoc, "clientWidth");
+			int screenHeight = (int) getDocumentAttribute(myDoc, "clientHeight");
+			int screenWidth = (int) getDocumentAttribute(myDoc, "clientWidth");
 
 			//Get bitmap to hold screen fragment.
-            var bm = new Bitmap(screenWidth, screenHeight, PixelFormat.Format48bppRgb);
+            Bitmap bm = new Bitmap(screenWidth, screenHeight, PixelFormat.Format48bppRgb);
+//			Bitmap bm = new Bitmap(screenWidth, screenHeight, PixelFormat.Format16bppRgb555);
 
 			//Create a target bitmap to draw into.
-			var bm2 = new Bitmap(widthsize + URLExtraLeft, heightsize + URLExtraHeight - trimHeight, PixelFormat.Format16bppRgb555);
-			var g2 = Graphics.FromImage(bm2);
+			Bitmap bm2 = new Bitmap(widthsize + URLExtraLeft, heightsize + URLExtraHeight - trimHeight, PixelFormat.Format16bppRgb555);
+			Graphics g2 = Graphics.FromImage(bm2);
 
 			//Get inner browser window.
-			var hwnd = GetHwndOfShellDocObjectView(browserHWND);
+			IntPtr hwnd = GetHwndOfShellDocObjectView(browserHWND);
 			hwnd = GetHwndForInternetExplorerServer(hwnd);
 
-			var myPage = 0;
+			int myPage = 0;
 
 			//Get Screen Height (for bottom up screen drawing)
 			while ((myPage*screenHeight) < heightsize)
@@ -154,21 +125,21 @@ namespace WatiN.Core
 			//Rollback the page count by one
 			myPage--;
 
-			var myPageWidth = 0;
+			int myPageWidth = 0;
 
 			while ((myPageWidth*screenWidth) < widthsize)
 			{
 				setDocumentAttribute(myDoc, "scrollLeft", (screenWidth - 5)*myPageWidth);
-				var brwLeft = (int) getDocumentAttribute(myDoc, "scrollLeft");
+				int brwLeft = (int) getDocumentAttribute(myDoc, "scrollLeft");
 
-				for (var i = myPage; i >= 0; --i)
+				for (int i = myPage; i >= 0; --i)
 				{
 					//Shoot visible window
-					var g = Graphics.FromImage(bm);
-					var hdc = g.GetHdc();
+					Graphics g = Graphics.FromImage(bm);
+					IntPtr hdc = g.GetHdc();
 
 					setDocumentAttribute(myDoc, "scrollTop", (screenHeight - 5)*i);
-					var brwTop = (int) getDocumentAttribute(myDoc, "scrollTop");
+					int brwTop = (int) getDocumentAttribute(myDoc, "scrollTop");
 
 					NativeMethods.PrintWindow(hwnd, hdc, 0);
 
@@ -177,7 +148,7 @@ namespace WatiN.Core
 					g.Flush();
 					g.Dispose();
 
-					var hBitmap = bm.GetHbitmap();
+					IntPtr hBitmap = bm.GetHbitmap();
 					System.Drawing.Image screenfrag = System.Drawing.Image.FromHbitmap(hBitmap);
 
 					NativeMethods.DeleteObject(hBitmap);
@@ -200,12 +171,12 @@ namespace WatiN.Core
 			}
 
 			//scale image
-			var myResolution = Convert.ToDouble(scalePercentage)*0.01;
-			var finalWidth = (int) ((widthsize + URLExtraLeft)*myResolution);
-			var finalHeight = (int) ((heightsize + URLExtraHeight)*myResolution);
+			double myResolution = Convert.ToDouble(scalePercentage)*0.01;
+			int finalWidth = (int) ((widthsize + URLExtraLeft)*myResolution);
+			int finalHeight = (int) ((heightsize + URLExtraHeight)*myResolution);
 
-			var finalImage = new Bitmap(finalWidth, finalHeight, PixelFormat.Format16bppRgb555);
-			var gFinal = Graphics.FromImage(finalImage);
+			Bitmap finalImage = new Bitmap(finalWidth, finalHeight, PixelFormat.Format16bppRgb555);
+			Graphics gFinal = Graphics.FromImage(finalImage);
 			gFinal.DrawImage(bm2, 0, 0, finalWidth, finalHeight);
 
 			//Clean Up.
@@ -226,9 +197,9 @@ namespace WatiN.Core
 			// TabWindowClass window which is the parent of the "Document" window. Loop
 			// through these siblings to find that TabWindowClass and then drop down to
 			// its children.
-			var hwnd = browserHWND;
+			IntPtr hwnd = browserHWND;
 			hwnd = NativeMethods.GetWindow(hwnd, NativeMethods.GW_CHILD);
-			var sbc = new StringBuilder(256);
+			StringBuilder sbc = new StringBuilder(256);
 
 			NativeMethods.GetClassName(hwnd, sbc, 256);
 
@@ -251,7 +222,7 @@ namespace WatiN.Core
 		private static IntPtr GetHwndForInternetExplorerServer(IntPtr hwnd)
 		{
 			//Get Browser "Document" Handle
-			var sbc = new StringBuilder(256);
+			StringBuilder sbc = new StringBuilder(256);
 
 			while (hwnd != IntPtr.Zero)
 			{
@@ -270,24 +241,24 @@ namespace WatiN.Core
 		private static void DrawResolutionGuidesOnImage(Graphics g2, int URLExtraHeight, int URLExtraLeft)
 		{
 			// Create pen.
-			var myWidth = 1;
-			var myPen = new Pen(Color.Navy, myWidth);
+			int myWidth = 1;
+			Pen myPen = new Pen(Color.Navy, myWidth);
 
 			// Create coordinates of points that define line.
-			var x1 = -(float) myWidth - 1 + URLExtraLeft;
-			var y1 = -(float) myWidth - 1 + URLExtraHeight;
+			float x1 = -(float) myWidth - 1 + URLExtraLeft;
+			float y1 = -(float) myWidth - 1 + URLExtraHeight;
 
-			var x600 = 600.0F + myWidth + 1;
-			var y480 = 480.0F + myWidth + 1;
+			float x600 = 600.0F + myWidth + 1;
+			float y480 = 480.0F + myWidth + 1;
 
-			var x2 = 800.0F + myWidth + 1;
-			var y2 = 600.0F + myWidth + 1;
+			float x2 = 800.0F + myWidth + 1;
+			float y2 = 600.0F + myWidth + 1;
 
-			var x3 = 1024.0F + myWidth + 1;
-			var y3 = 768.0F + myWidth + 1;
+			float x3 = 1024.0F + myWidth + 1;
+			float y3 = 768.0F + myWidth + 1;
 
-			var x1280 = 1280.0F + myWidth + 1;
-			var y1024 = 1024.0F + myWidth + 1;
+			float x1280 = 1280.0F + myWidth + 1;
+			float y1024 = 1024.0F + myWidth + 1;
 
 			// Draw line to screen.
 			g2.DrawRectangle(myPen, x1, y1, x600 + myWidth, y480 + myWidth);
@@ -296,13 +267,14 @@ namespace WatiN.Core
 			g2.DrawRectangle(myPen, x1, y1, x1280 + myWidth, y1024 + myWidth);
 
 			// Create font and brush.
-			var drawFont = new Font("Arial", 12);
-			var drawBrush = new SolidBrush(Color.Navy);
+			Font drawFont = new Font("Arial", 12);
+			SolidBrush drawBrush = new SolidBrush(Color.Navy);
 
 			// Set format of string.
-			var drawFormat = new StringFormat {FormatFlags = StringFormatFlags.FitBlackBox};
+			StringFormat drawFormat = new StringFormat();
+			drawFormat.FormatFlags = StringFormatFlags.FitBlackBox;
 
-		    // Draw string to screen.
+			// Draw string to screen.
 			g2.DrawString("600 x 480", drawFont, drawBrush, 5, y480 - 20 + URLExtraHeight, drawFormat);
 			g2.DrawString("800 x 600", drawFont, drawBrush, 5, y2 - 20 + URLExtraHeight, drawFormat);
 			g2.DrawString("1024 x 768", drawFont, drawBrush, 5, y3 - 20 + URLExtraHeight, drawFormat);
@@ -312,33 +284,33 @@ namespace WatiN.Core
 		private static void WriteUrlOnImage(Graphics g2, string myLocalLink, int URLExtraHeight, int widthsize)
 		{
 			// Backfill URL paint location
-			var whiteBrush = new SolidBrush(Color.White);
-			var fillRect = new Rectangle(0, 0, widthsize, URLExtraHeight + 2);
-			var fillRegion = new Region(fillRect);
+			SolidBrush whiteBrush = new SolidBrush(Color.White);
+			Rectangle fillRect = new Rectangle(0, 0, widthsize, URLExtraHeight + 2);
+			Region fillRegion = new Region(fillRect);
 			g2.FillRegion(whiteBrush, fillRegion);
 
-			var drawBrushURL = new SolidBrush(Color.Black);
-			var drawFont = new Font("Arial", 12);
-			var drawFormat = new StringFormat {FormatFlags = StringFormatFlags.FitBlackBox};
+			SolidBrush drawBrushURL = new SolidBrush(Color.Black);
+			Font drawFont = new Font("Arial", 12);
+			StringFormat drawFormat = new StringFormat();
+			drawFormat.FormatFlags = StringFormatFlags.FitBlackBox;
 
-		    g2.DrawString(myLocalLink, drawFont, drawBrushURL, 0, 0, drawFormat);
+			g2.DrawString(myLocalLink, drawFont, drawBrushURL, 0, 0, drawFormat);
 		}
 
 		private static EncoderParameters GetEncoderParams(int quality)
 		{
-			var eps = new EncoderParameters(1);
-			var myQuality = Convert.ToInt64(quality);
+			EncoderParameters eps = new EncoderParameters(1);
+			long myQuality = Convert.ToInt64(quality);
 			eps.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, myQuality);
 			return eps;
 		}
 
-		private static ImageCodecInfo GetCodec(string imagetype)
+		private static ImageCodecInfo GetCodec(string extension)
 		{
 			ImageCodecInfo ici;
-			switch (imagetype.ToLower(CultureInfo.InvariantCulture))
+			switch (extension.ToLower(CultureInfo.InvariantCulture))
 			{
 				case "jpg":
-                case "jpeg":
 					ici = GetEncoderInfo("image/jpeg");
 					break;
 				case "tif":
@@ -363,24 +335,25 @@ namespace WatiN.Core
 
 		private static object getDocumentAttribute(IHTMLDocument2 theHTMLDocument, string theAttributeName)
 		{
-			var doc5 = (IHTMLDocument5) theHTMLDocument;
-			var doc3 = (IHTMLDocument3) theHTMLDocument;
-			
-            //compatibility mode affects how height is computed
+			IHTMLDocument5 doc5 = (IHTMLDocument5) theHTMLDocument;
+			IHTMLDocument3 doc3 = (IHTMLDocument3) theHTMLDocument;
+			//compatibility mode affects how height is computed
 			if ((doc3.documentElement != null) && (!doc5.compatMode.Equals("BackCompat")))
 			{
 				return doc3.documentElement.getAttribute(theAttributeName, 0);
 			}
-			return theHTMLDocument.body.getAttribute(theAttributeName, 0);
+			else
+			{
+				return theHTMLDocument.body.getAttribute(theAttributeName, 0);
+			}
 		}
 
 		private static void setDocumentAttribute(IHTMLDocument2 theHTMLDocument, string theAttributeName,
 		                                         object theAttributeValue)
 		{
-			var doc5 = (IHTMLDocument5) theHTMLDocument;
-			var doc3 = (IHTMLDocument3) theHTMLDocument;
-			
-            //compatibility mode affects how height is computed
+			IHTMLDocument5 doc5 = (IHTMLDocument5) theHTMLDocument;
+			IHTMLDocument3 doc3 = (IHTMLDocument3) theHTMLDocument;
+			//compatibility mode affects how height is computed
 			if ((doc3.documentElement != null) && (!doc5.compatMode.Equals("BackCompat")))
 			{
 				doc3.documentElement.setAttribute(theAttributeName, theAttributeValue, 0);
@@ -393,10 +366,11 @@ namespace WatiN.Core
 
 		private static ImageCodecInfo GetEncoderInfo(String mimeType)
 		{
-			var encoders = ImageCodecInfo.GetImageEncoders();
-			for (var j = 0; j < encoders.Length; ++j)
+			ImageCodecInfo[] encoders = ImageCodecInfo.GetImageEncoders();
+			for (int j = 0; j < encoders.Length; ++j)
 			{
-				if (encoders[j].MimeType == mimeType) return encoders[j];
+				if (encoders[j].MimeType == mimeType)
+					return encoders[j];
 			}
 			return null;
 		}

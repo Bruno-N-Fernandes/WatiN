@@ -19,10 +19,10 @@
 using System;
 using System.Text.RegularExpressions;
 using System.Threading;
-using Moq;
 using mshtml;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
+using Iz = NUnit.Framework.SyntaxHelpers.Is;
+using Rhino.Mocks;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
 
@@ -31,8 +31,9 @@ namespace WatiN.Core.UnitTests
 	[TestFixture]
 	public class DocumentTests : BaseWithIETests
 	{
-		private Mock<INativeDocument> _nativeDocumentMock;
-		private Mock<IHTMLWindow2> _htmlWindow2Mock;
+		private MockRepository _mockRepository;
+		private IHTMLDocument2 _mockHtmlDocument;
+		private IHTMLWindow2 _mockHtmlWindow2;
 	    private int _originalWaitUntilExistsTimeOut;
 
 		public override Uri TestPageUri
@@ -42,8 +43,9 @@ namespace WatiN.Core.UnitTests
 
         private void InitMocks() 
 		{
-			_nativeDocumentMock = new Mock<INativeDocument>();
-			_htmlWindow2Mock = new Mock<IHTMLWindow2>();
+			_mockRepository = new MockRepository();
+			_mockHtmlDocument = (IHTMLDocument2) _mockRepository.CreateMock(typeof (IHTMLDocument2));
+			_mockHtmlWindow2 = (IHTMLWindow2) _mockRepository.CreateMock(typeof (IHTMLWindow2));
 			_originalWaitUntilExistsTimeOut = Settings.WaitUntilExistsTimeOut;
 		}
 
@@ -63,31 +65,27 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void DocumentUrlandUri()
 		{
-			var uri = new Uri(ie.Url);
+			Uri uri = new Uri(ie.Url);
 			Assert.AreEqual(MainURI, uri);
 			Assert.AreEqual(ie.Uri, uri);
 		}
 
 		[Test]
-		public void RunScriptShouldCallNativeDocumentProperty()
+		public void RunScriptShouldCallHtmlDocumentProperty()
 		{
 			InitMocks();
 
-			var documentMock = new Mock<Document>();
-		    var htmlDocument2Mock = new Mock<IHTMLDocument2>();
+			Document mockDocument = (Document) _mockRepository.PartialMock(typeof (Document));
 
-            documentMock.Expect(document => document.NativeDocument).Returns(_nativeDocumentMock.Object).AtMostOnce();
-            _nativeDocumentMock.Expect(nativedoc => nativedoc.Object).Returns(htmlDocument2Mock.Object);
-            htmlDocument2Mock.Expect(htmldoc => htmldoc.parentWindow).Returns(_htmlWindow2Mock.Object).AtMostOnce();
-			
-            _htmlWindow2Mock.Expect(htmlwindow => htmlwindow.execScript("alert('hello')", "javascript")).Returns(null);
+			Expect.Call(mockDocument.HtmlDocument).Repeat.Once().Return(_mockHtmlDocument);
+			Expect.Call(_mockHtmlDocument.parentWindow).Repeat.Once().Return(_mockHtmlWindow2);
+			Expect.Call(_mockHtmlWindow2.execScript("alert('hello')", "javascript")).Return(null);
 
-		    var document1 = documentMock.Object;
+			_mockRepository.ReplayAll();
 
-		    document1.RunScript("alert('hello')");
+			mockDocument.RunScript("alert('hello')");
 
-			_nativeDocumentMock.VerifyAll();
-			_htmlWindow2Mock.VerifyAll();
+			_mockRepository.VerifyAll();
 		}
 
 		[Test]
@@ -96,7 +94,7 @@ namespace WatiN.Core.UnitTests
 			ie.GoTo(IndexURI);
 
 			ie.RunScript("window.document.write('java script has run');");
-			Assert.That(ie.Text, Is.EqualTo("java script has run"));
+			Assert.That(ie.Text, NUnit.Framework.SyntaxHelpers.Is.EqualTo("java script has run"));
 
 			try
 			{
@@ -114,26 +112,29 @@ namespace WatiN.Core.UnitTests
 		{
 			InitMocks();
 
-			var nativeElementMock = new Mock<INativeElement>();
-			var documentMock = new Mock<Document>( new Mock<DomContainer>().Object, _nativeDocumentMock.Object);
+			IHTMLElement _mockHTMLElement = (IHTMLElement) _mockRepository.CreateMock(typeof (IHTMLElement));
 
-			documentMock.Expect(doc => doc.NativeDocument).Returns(_nativeDocumentMock.Object);
-		    _nativeDocumentMock.Expect(nativeDoc => nativeDoc.Body).Returns(nativeElementMock.Object);
-            nativeElementMock.Expect(element => element.GetAttributeValue("innertext")).Returns("Document innertext returned");
+			Document mockDocument = (Document) _mockRepository.PartialMock(typeof (Document));
 
-		    var document = documentMock.Object;
+			Expect.Call(mockDocument.HtmlDocument).Repeat.Once().Return(_mockHtmlDocument);
+			Expect.Call(_mockHtmlDocument.body).Return(_mockHTMLElement);
+			Expect.Call(_mockHTMLElement.innerText).Return("Document innertext returned");
 
-		    Assert.That(document.Text, Is.EqualTo("Document innertext returned"));
+			_mockRepository.ReplayAll();
+
+			Assert.That(mockDocument.Text, NUnit.Framework.SyntaxHelpers.Is.EqualTo("Document innertext returned"));
+
+			_mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void TestEval()
 		{
-			var result = ie.Eval("2+5");
-			Assert.That(result, Is.EqualTo("7"));
+			string result = ie.Eval("2+5");
+			Assert.That(result, NUnit.Framework.SyntaxHelpers.Is.EqualTo("7"));
 
 			result = ie.Eval("'te' + 'st'");
-			Assert.That(result, Is.EqualTo("test"));
+			Assert.That(result, NUnit.Framework.SyntaxHelpers.Is.EqualTo("test"));
 
 
 			try
@@ -149,37 +150,18 @@ namespace WatiN.Core.UnitTests
 			// Make sure a valid eval after a failed eval executes OK.
 			result = ie.Eval("window.document.write('java script has run');4+4;");
 			Assert.AreEqual("8", result);
-			Assert.That(ie.Text, Is.EqualTo("java script has run"));
-
-		    ie.GoTo(TestPageUri);
+			Assert.That(ie.Text, NUnit.Framework.SyntaxHelpers.Is.EqualTo("java script has run"));
 		}
 
 		[Test]
 		public void RunScriptAndEval()
 		{
 			ie.RunScript("var myVar = 5;");
-			var result = ie.Eval("myVar;");
+			string result = ie.Eval("myVar;");
 			Assert.AreEqual("5", result);
 		}
 
-        [Test]
-        public void ContainsText()
-        {
-            Assert.IsTrue(ie.ContainsText("Contains text in DIV"), "Text not found");
-            Assert.IsFalse(ie.ContainsText("abcde"), "Text incorrectly found");
-
-            Assert.IsTrue(ie.ContainsText(new Regex("Contains text in DIV")), "Regex: Text not found");
-            Assert.IsFalse(ie.ContainsText(new Regex("abcde")), "Regex: Text incorrectly found");
-        }
-
-        [Test]
-        public void FindText()
-        {
-            Assert.AreEqual("Contains text in DIV", ie.FindText(new Regex("Contains .* in DIV")), "Text not found");
-            Assert.IsNull(ie.FindText(new Regex("abcde")), "Text incorrectly found");
-        }
-
-        [Test, ExpectedException(typeof(Exceptions.TimeoutException))]
+        [Test, ExpectedException(typeof(WatiN.Core.Exceptions.TimeoutException))]
         public void WaitUntilContainsTextShouldThrowTimeOutException()
         {
             Settings.WaitUntilExistsTimeOut = 1;
@@ -199,7 +181,7 @@ namespace WatiN.Core.UnitTests
             ie.GoTo(TestPageUri);
         }
 
-        [Test, ExpectedException(typeof(Exceptions.TimeoutException))]
+        [Test, ExpectedException(typeof(WatiN.Core.Exceptions.TimeoutException))]
         public void WaitUntilContainsTextRegexShouldThrowTimeOutException()
         {
             Settings.WaitUntilExistsTimeOut = 1;
@@ -219,165 +201,187 @@ namespace WatiN.Core.UnitTests
             ie.GoTo(TestPageUri);
         }
 
+#if !NET11
         [Test, Ignore("TODO")]
         public void TestAreaPredicateOverload()
         {
             //            Area Area = ie.Area(t => t.Name == "q");
-            var Area = ie.Area(t => t.Id == "readonlytext");
+            Area Area = ie.Area(delegate(Area t) { return t.Id == "readonlytext"; });
 
-            Assert.That(Area.Id, Is.EqualTo("readonlytext"));
+            Assert.That(Area.Id, Iz.EqualTo("readonlytext"));
         }
 
         [Test]
         public void TestButtonPredicateOverload()
         {
-            var Button = ie.Button(t => t.Id == "popupid");
+            //            Button Button = ie.Button(t => t.Name == "q");
+            Button Button = ie.Button(delegate(Button t) { return t.Id == "popupid"; });
 
-            Assert.That(Button.Id, Is.EqualTo("popupid"));
+            Assert.That(Button.Id, Iz.EqualTo("popupid"));
         }
 
         [Test]
         public void TestCheckBoxPredicateOverload()
         {
-            var CheckBox = ie.CheckBox(t => t.Id == "Checkbox2");
+            //            CheckBox CheckBox = ie.CheckBox(t => t.Name == "q");
+            CheckBox CheckBox = ie.CheckBox(delegate(CheckBox t) { return t.Id == "Checkbox2"; });
 
-            Assert.That(CheckBox.Id, Is.EqualTo("Checkbox2"));
+            Assert.That(CheckBox.Id, Iz.EqualTo("Checkbox2"));
         }
 
         [Test]
         public void TestElementPredicateOverload()
         {
-            var Element = ie.Element(t => t.Id == "Radio1");
+            //            Element Element = ie.Element(t => t.Name == "q");
+            Element Element = ie.Element(delegate(Element t) { return t.Id == "Radio1"; });
 
-            Assert.That(Element.Id, Is.EqualTo("Radio1"));
+            Assert.That(Element.Id, Iz.EqualTo("Radio1"));
         }
 
         [Test]
         public void TestFileUploadPredicateOverload()
         {
-            var FileUpload = ie.FileUpload(t => t.Id == "upload");
+            //            FileUpload FileUpload = ie.FileUpload(t => t.Name == "q");
+            FileUpload FileUpload = ie.FileUpload(delegate(FileUpload t) { return t.Id == "upload"; });
 
-            Assert.That(FileUpload.Id, Is.EqualTo("upload"));
+            Assert.That(FileUpload.Id, Iz.EqualTo("upload"));
         }
 
         [Test]
         public void TestFormPredicateOverload()
         {
-            var Form = ie.Form(t => t.Id == "Form");
+            //            Form Form = ie.Form(t => t.Name == "q");
+            Form Form = ie.Form(delegate(Form t) { return t.Id == "Form"; });
 
-            Assert.That(Form.Id, Is.EqualTo("Form"));
+            Assert.That(Form.Id, Iz.EqualTo("Form"));
         }
 
         [Test]
         public void TestLabelPredicateOverload()
         {
-            var Label = ie.Label(t => t.For == "Checkbox21");
+            //            Label Label = ie.Label(t => t.Name == "q");
+            Label Label = ie.Label(delegate(Label t) { return t.For == "Checkbox21"; });
 
-            Assert.That(Label.For, Is.EqualTo("Checkbox21"));
+            Assert.That(Label.For, Iz.EqualTo("Checkbox21"));
         }
 
         [Test]
         public void TestLinkPredicateOverload()
         {
-            var Link = ie.Link(t => t.Id == "testlinkid");
+            //            Link Link = ie.Link(t => t.Name == "q");
+            Link Link = ie.Link(delegate(Link t) { return t.Id == "testlinkid"; });
 
-            Assert.That(Link.Id, Is.EqualTo("testlinkid"));
+            Assert.That(Link.Id, Iz.EqualTo("testlinkid"));
         }
 
         [Test]
         public void TestParaPredicateOverload()
         {
-            var Para = ie.Para(t => t.Id == "links");
+            //            Para Para = ie.Para(t => t.Name == "q");
+            Para Para = ie.Para(delegate(Para t) { return t.Id == "links"; });
 
-            Assert.That(Para.Id, Is.EqualTo("links"));
+            Assert.That(Para.Id, Iz.EqualTo("links"));
         }
 
         [Test]
         public void TestRadioButtonPredicateOverload()
         {
-            var RadioButton = ie.RadioButton(t => t.Id == "Radio1");
+            //            RadioButton RadioButton = ie.RadioButton(t => t.Name == "q");
+            RadioButton RadioButton = ie.RadioButton(delegate(RadioButton t) { return t.Id == "Radio1"; });
 
-            Assert.That(RadioButton.Id, Is.EqualTo("Radio1"));
+            Assert.That(RadioButton.Id, Iz.EqualTo("Radio1"));
         }
 
         [Test]
         public void TestSelectListPredicateOverload()
         {
-            var SelectList = ie.SelectList(t => t.Id == "Select1");
+            //            SelectList SelectList = ie.SelectList(t => t.Name == "q");
+            SelectList SelectList = ie.SelectList(delegate(SelectList t) { return t.Id == "Select1"; });
 
-            Assert.That(SelectList.Id, Is.EqualTo("Select1"));
+            Assert.That(SelectList.Id, Iz.EqualTo("Select1"));
         }
 
         [Test]
         public void TestTablePredicateOverload()
         {
-            var Table = ie.Table(t => t.Id == "table1");
+            //            Table Table = ie.Table(t => t.Name == "q");
+            Table Table = ie.Table(delegate(Table t) { return t.Id == "table1"; });
 
-            Assert.That(Table.Id, Is.EqualTo("table1"));
+            Assert.That(Table.Id, Iz.EqualTo("table1"));
         }
 
         [Test]
         public void TestTableCellPredicateOverload()
         {
-            var TableCell = ie.TableCell(t => t.Id == "td2");
+            //            TableCell TableCell = ie.TableCell(t => t.Name == "q");
+            TableCell TableCell = ie.TableCell(delegate(TableCell t) { return t.Id == "td2"; });
 
-            Assert.That(TableCell.Id, Is.EqualTo("td2"));
+            Assert.That(TableCell.Id, Iz.EqualTo("td2"));
         }
 
         [Test]
         public void TestTableRowPredicateOverload()
         {
-            var TableRow = ie.TableRow(t => t.Id == "row0");
+            //            TableRow TableRow = ie.TableRow(t => t.Name == "q");
+            TableRow TableRow = ie.TableRow(delegate(TableRow t) { return t.Id == "row0"; });
 
-            Assert.That(TableRow.Id, Is.EqualTo("row0"));
+            Assert.That(TableRow.Id, Iz.EqualTo("row0"));
         }
 
         [Test, Ignore("TODO")]
         public void TestTableBodyPredicateOverload()
         {
-            var TableBody = ie.TableBody(t => t.Id == "readonlytext");
+            //            TableBody TableBody = ie.TableBody(t => t.Name == "q");
+            TableBody TableBody = ie.TableBody(delegate(TableBody t) { return t.Id == "readonlytext"; });
 
-            Assert.That(TableBody.Id, Is.EqualTo("readonlytext"));
+            Assert.That(TableBody.Id, Iz.EqualTo("readonlytext"));
         }
 
         [Test]
         public void TestTextFieldPredicateOverload()
         {
-            var textField = ie.TextField(t => t.Id == "readonlytext");
+            //            TextField textField = ie.TextField(t => t.Name == "q");
+            TextField textField = ie.TextField(delegate(TextField t) { return t.Id == "readonlytext"; });
 
-            Assert.That(textField.Id, Is.EqualTo("readonlytext"));
+            Assert.That(textField.Id, Iz.EqualTo("readonlytext"));
         }
 
         [Test]
         public void TestSpanPredicateOverload()
         {
-            var Span = ie.Span(t => t.Id == "Span1");
+            //            Span Span = ie.Span(t => t.Name == "q");
+            Span Span = ie.Span(delegate(Span t) { return t.Id == "Span1"; });
 
-            Assert.That(Span.Id, Is.EqualTo("Span1"));
+            Assert.That(Span.Id, Iz.EqualTo("Span1"));
         }
 
         [Test]
         public void TestDivPredicateOverload()
         {
-            var Div = ie.Div(t => t.Id == "NextAndPreviousTests");
+            //            Div Div = ie.Div(t => t.Name == "q");
+            Div Div = ie.Div(delegate(Div t) { return t.Id == "NextAndPreviousTests"; });
 
-            Assert.That(Div.Id, Is.EqualTo("NextAndPreviousTests"));
+            Assert.That(Div.Id, Iz.EqualTo("NextAndPreviousTests"));
         }
 
         [Test, Ignore("TODO")]
         public void TestImagePredicateOverload()
         {
-            var Image = ie.Image(t => t.Id == "readonlytext");
+            //            Image Image = ie.Image(t => t.Name == "q");
+            Image Image = ie.Image(delegate(Image t) { return t.Id == "readonlytext"; });
 
-            Assert.That(Image.Id, Is.EqualTo("readonlytext"));
+            Assert.That(Image.Id, Iz.EqualTo("readonlytext"));
         }
+
+#endif 
+
 	}
 
     internal class HTMLInjector
     {
-        private readonly string _html;
+        private string _html;
         private readonly int _numberOfSecondsToWaitBeforeInjection;
-        private readonly Document _document;
+        private Document _document;
 
         public HTMLInjector(Document document, string html, int numberOfSecondsToWaitBeforeInjection)
         {
@@ -392,7 +396,7 @@ namespace WatiN.Core.UnitTests
 
             try
             {
-                ((IHTMLDocument2)_document.NativeDocument.Object).writeln(_html);
+                _document.HtmlDocument.writeln(_html);
             }
             catch { }
         }
@@ -405,10 +409,10 @@ namespace WatiN.Core.UnitTests
         /// <param name="numberOfSecondsToWaitBeforeInjection"></param>
         public static void Start(Document document, string html, int numberOfSecondsToWaitBeforeInjection)
         {
-            var htmlInjector = new HTMLInjector(document, html, numberOfSecondsToWaitBeforeInjection);
+            HTMLInjector htmlInjector = new HTMLInjector(document, html, numberOfSecondsToWaitBeforeInjection);
 
-            ThreadStart start = htmlInjector.Inject;
-            var thread = new Thread(start);
+            ThreadStart start = new ThreadStart(htmlInjector.Inject);
+            Thread thread = new Thread(start);
             thread.Start();
         }
 

@@ -16,9 +16,10 @@
 
 #endregion Copyright
 
-using Moq;
+using System;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
+using Rhino.Mocks;
+using Is=NUnit.Framework.SyntaxHelpers.Is;
 
 namespace WatiN.Core.UnitTests
 {
@@ -35,10 +36,10 @@ namespace WatiN.Core.UnitTests
 		public void Properties()
 		{
 			Settings.AttachToIETimeOut = 111;
-			var autoCloseDialogs = !Settings.AutoCloseDialogs;
+			bool autoCloseDialogs = !Settings.AutoCloseDialogs;
 			Settings.AutoCloseDialogs = autoCloseDialogs;
 			Settings.HighLightColor = "strange color";
-			var highLightElement = !Settings.HighLightElement;
+			bool highLightElement = !Settings.HighLightElement;
 			Settings.HighLightElement = highLightElement;
 			Settings.WaitForCompleteTimeOut = 222;
 			Settings.WaitUntilExistsTimeOut = 333;
@@ -56,40 +57,41 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void CloneShouldDelegateToInstance()
 		{
-            // GIVEN
-            var settingsMock = new Mock<ISettings>();
+            Rhino.Mocks.MockRepository mocks = new MockRepository();
+            ISettings settings = (ISettings)mocks.CreateMock(typeof(ISettings));
 
-            settingsMock.Expect(settings => settings.Clone()).Returns((ISettings) null);
-		    Settings.Instance = settingsMock.Object;
+            Expect.Call(settings.Clone()).Return(null);
+		    Settings.Instance = settings;
 
-            // WHEN
+            mocks.ReplayAll();
+
 		    Settings.Clone();
 
-            // THEN
-            settingsMock.VerifyAll();
+            mocks.VerifyAll();
         }
 
 	    [Test]
 		public void Reset()
 		{
-            // GIVEN
-            var settingsMock = new Mock<ISettings>();
+            Rhino.Mocks.MockRepository mocks = new MockRepository();
+            ISettings settings = (ISettings)mocks.CreateMock(typeof(ISettings));
 
-	        settingsMock.Expect(settings => settings.Reset());
-            Settings.Instance = settingsMock.Object;
+	        settings.Reset();
+            Settings.Instance = settings;
 
-            // WHEN
+            mocks.ReplayAll();
+
             Settings.Reset();
 
-            // THEN
-            settingsMock.VerifyAll();
+            mocks.VerifyAll();
         }
 
 		[Test]
 		public void IESettingsSetToNullShouldThrowArgumentNullException()
 		{
             // GIVEN 
-		    var original = Settings.Instance;
+
+		    ISettings original = Settings.Instance;
 		    Assert.That(original, Is.Not.Null, "Expected instance of Settings");
             
             // WHEN

@@ -20,15 +20,15 @@ using System;
 using System.Threading;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Logging;
-using WatiN.Core.UtilityClasses;
 
 namespace WatiN.Core.DialogHandlers
 {
 	public class FileDownloadHandler : BaseDialogHandler
 	{
 		private Window downloadProgressDialog;
-	    private readonly FileDownloadOptionEnum _optionEnum;
-		private readonly string saveAsFilename = String.Empty;
+		private bool hasHandledFileDownloadDialog = false;
+		private FileDownloadOptionEnum _optionEnum;
+		private string saveAsFilename = String.Empty;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="FileDownloadHandler"/> class.
@@ -58,18 +58,21 @@ namespace WatiN.Core.DialogHandlers
 			}
 
 			_optionEnum = FileDownloadOptionEnum.Save;
-			saveAsFilename = filename;
+			saveAsFilename = UtilityClass.EscapeSendKeysCharacters(filename);
 		}
 
-	    /// <summary>
-	    /// Gets a value indicating whether this instance has handled a file download dialog.
-	    /// </summary>
-	    /// <value>
-	    /// 	<c>true</c> if this instance has handled a file download dialog; otherwise, <c>false</c>.
-	    /// </value>
-	    public bool HasHandledFileDownloadDialog { get; private set; }
+		/// <summary>
+		/// Gets a value indicating whether this instance has handled a file download dialog.
+		/// </summary>
+		/// <value>
+		/// 	<c>true</c> if this instance has handled a file download dialog; otherwise, <c>false</c>.
+		/// </value>
+		public bool HasHandledFileDownloadDialog
+		{
+			get { return hasHandledFileDownloadDialog; }
+		}
 
-	    /// <summary>
+		/// <summary>
 		/// Gets the full save as filename used when the downloaded file will be saved to disk.
 		/// </summary>
 		/// <value>The save as filename.</value>
@@ -86,76 +89,68 @@ namespace WatiN.Core.DialogHandlers
 		/// <returns></returns>
 		public override bool HandleDialog(Window window)
 		{
-			if (HandledFileDownloadDialog(window)) return true;
+			// This if handles the File download dialog
+			if (!HasHandledFileDownloadDialog && IsFileDownloadDialog(window))
+			{
+				window.ToFront();
+				window.SetActivate();
 
-			return HandledDownloadProgressDialog(window) || HandledFileSaveDialog(window);
+				DownloadProgressDialog = new Window(window.ParentHwnd);
+
+				WinButton btn = GetButtonToPress(window);
+				btn.Click();
+
+				hasHandledFileDownloadDialog = !Exists(window);
+
+				if (HasHandledFileDownloadDialog)
+				{
+					Logger.LogAction("Download started at " + DateTime.Now.ToLongTimeString());
+					Logger.LogAction("Clicked " + _optionEnum.ToString());
+				}
+
+				return true;
+			}
+
+			// This if handles the download progress dialog
+			if (IsDownloadProgressDialog(window))
+			{
+				DownloadProgressDialog = window;
+
+                WinButton openOrRun= new WinButton(4377, new Hwnd(window.Hwnd));
+
+                if (openOrRun.Enabled)
+                {
+                    WinButton close = new WinButton(2, new Hwnd(window.Hwnd));
+
+                    close.Click();
+                    
+                    SimpleTimer timer = new SimpleTimer(5);
+                    while (!timer.Elapsed && window.Exists())
+                    {
+                        Thread.Sleep(200);
+                    }
+                }
+
+				return true;
+			}
+
+			// This if handles the File save as dialog
+			if (IsFileSaveDialog(window))
+			{
+				Logger.LogAction("Saving Download file as " + saveAsFilename);
+
+				DownloadProgressDialog = new Window(window.ParentHwnd);
+
+				HandleFileSaveDialog(window);
+
+				return true;
+			}
+
+			// Window is not a dialog this handler can handle.
+			return false;
 		}
 
-	    private bool HandledFileSaveDialog(Window window)
-	    {
-	        if (IsFileSaveDialog(window))
-	        {
-	            Logger.LogAction("Saving Download file as " + saveAsFilename);
-
-	            DownloadProgressDialog = new Window(window.ParentHwnd);
-
-	            HandleFileSaveDialog(window);
-
-	            return true;
-	        }
-	        return false;
-	    }
-
-	    private bool HandledDownloadProgressDialog(Window window)
-	    {
-	        if (IsDownloadProgressDialog(window))
-	        {
-	            DownloadProgressDialog = window;
-
-	            var openOrRun= new WinButton(4377, new Hwnd(window.Hwnd));
-
-	            if (openOrRun.Enabled)
-	            {
-	                var close = new WinButton(2, new Hwnd(window.Hwnd));
-	                close.Click();
-
-	                var actionUntilTimeOut = new TryActionUntilTimeOut(5);
-                    actionUntilTimeOut.Try(() => window.Exists());
-
-                    // TODO: What to do if the window doesn't close after timeout?
-	            }
-
-	            return true;
-	        }
-	        return false;
-	    }
-
-	    private bool HandledFileDownloadDialog(Window window)
-	    {
-	        if (!HasHandledFileDownloadDialog && IsFileDownloadDialog(window))
-	        {
-	            window.ToFront();
-	            window.SetActivate();
-
-	            DownloadProgressDialog = new Window(window.ParentHwnd);
-
-	            var btn = GetButtonToPress(window);
-	            btn.Click();
-
-	            HasHandledFileDownloadDialog = !Exists(window);
-
-	            if (HasHandledFileDownloadDialog)
-	            {
-	                Logger.LogAction("Download started at " + DateTime.Now.ToLongTimeString());
-	                Logger.LogAction("Clicked " + _optionEnum);
-	            }
-
-	            return true;
-	        }
-	        return false;
-	    }
-
-	    private WinButton GetButtonToPress(Window window)
+		private WinButton GetButtonToPress(Window window)
 		{
 			WinButton btn = null;
 
@@ -210,7 +205,7 @@ namespace WatiN.Core.DialogHandlers
 		/// </returns>
 		public bool IsDownloadProgressDialog(Window window)
 		{
-			// "9CCA0BC4" is valid before downloading of the file has started
+			// "9CCA0BC4" is valid before downloading the file has started
 			// "94CA0BC4" is valid during and after the download
 			return (window.StyleInHex == "9CCA0BC4") || (window.StyleInHex == "94CA0BC4");
 		}
@@ -240,6 +235,14 @@ namespace WatiN.Core.DialogHandlers
 		public bool Exists(Window dialog)
 		{
 			return dialog.Exists() && dialog.Visible;
+
+//	    bool exists = dialog.Exists();
+//      Logger.LogAction("Exists: exists == " + exists.ToString());
+//
+//	    bool visible = dialog.Visible;
+//      Logger.LogAction("Exists: visible == " + visible.ToString());
+//      
+//      return exists && visible;
 		}
 
 		/// <summary>
@@ -249,22 +252,33 @@ namespace WatiN.Core.DialogHandlers
 		/// <returns><c>true</c> if null or exists, otherwise <c>false</c></returns>
 		public bool ExistsOrNull(Window dialog)
 		{
-		    return dialog == null || Exists(dialog);
+			if (dialog == null)
+			{
+//	      Logger.LogAction("ExistsOrNull: dialog == null");
+				return true;
+			}
+
+			return Exists(dialog);
 		}
 
-	    /// <summary>
+		/// <summary>
 		/// Wait until the save/open/run dialog opens.
 		/// This exists because some web servers are slower to start a file than others.
 		/// </summary>
 		/// <param name="waitDurationInSeconds">duration in seconds to wait</param>
 		public void WaitUntilFileDownloadDialogIsHandled(int waitDurationInSeconds)
 		{
-	        var tryActionUntilTimeOut = new TryActionUntilTimeOut(waitDurationInSeconds);
-            tryActionUntilTimeOut.Try(() => HasHandledFileDownloadDialog);
+			SimpleTimer timeoutTimer = new SimpleTimer(waitDurationInSeconds);
 
-	        if (!HasHandledFileDownloadDialog)
+			while (!HasHandledFileDownloadDialog && !timeoutTimer.Elapsed)
 			{
-				throw new WatiNException(string.Format("Has not shown dialog after {0} seconds.", waitDurationInSeconds));
+//        Logger.LogAction("WaitUntilFileDownloadDialogIsHandled");
+				Thread.Sleep(200);
+			}
+
+			if (!HasHandledFileDownloadDialog)
+			{
+				throw new WatiNException(string.Format("Has not shown dialog after {0} seconds.", waitDurationInSeconds.ToString()));
 			}
 		}
 
@@ -274,12 +288,17 @@ namespace WatiN.Core.DialogHandlers
 		/// <param name="waitDurationInSeconds">duration in seconds to wait</param>
 		public void WaitUntilDownloadCompleted(int waitDurationInSeconds)
 		{
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(waitDurationInSeconds);
-            tryActionUntilTimeOut.Try(() => !ExistsOrNull(DownloadProgressDialog));
+			SimpleTimer timeoutTimer = new SimpleTimer(waitDurationInSeconds);
+
+			while (ExistsOrNull(DownloadProgressDialog) && !timeoutTimer.Elapsed)
+			{
+//        Logger.LogAction("WaitUntilDownloadCompleted");
+				Thread.Sleep(200);
+			}
 
 			if (ExistsOrNull(DownloadProgressDialog))
 			{
-				throw new WatiNException(string.Format("Still downloading after {0} seconds.", waitDurationInSeconds));
+				throw new WatiNException(string.Format("Still downloading after {0} seconds.", waitDurationInSeconds.ToString()));
 			}
 
 			Logger.LogAction("Download complete at " + DateTime.Now.ToLongTimeString());
@@ -290,34 +309,53 @@ namespace WatiN.Core.DialogHandlers
 			get { return downloadProgressDialog; }
 			set
 			{
-			    if (downloadProgressDialog != null) return;
-			    
-                var dialog = value;
-			    if (dialog != null)
-			    {
-			        if (!dialog.Exists() || !IsDownloadProgressDialog(dialog))
-			        {
-			            dialog = null;
-			        }
-			    }
+//        Logger.LogAction("Entering DownloadProgressDialog.");
+				if (downloadProgressDialog == null)
+				{
+//          Logger.LogAction("downloadProgressDialog == null");
 
-			    if (dialog != null)
-			    {
-			        downloadProgressDialog = dialog;
-			    }
+					Window dialog = value;
+
+					if (dialog != null)
+					{
+//            Logger.LogAction("!dialog.Exists()");
+
+						if (!dialog.Exists())
+						{
+//              Logger.LogAction("download progress dialog should exist.");
+							dialog = null;
+						}
+
+//            Logger.LogAction("!IsDownloadProgressDialog(dialog)");
+						if (!IsDownloadProgressDialog(dialog))
+						{
+//              Logger.LogAction("Should be a download progress dialog.");
+							dialog = null;
+						}
+					}
+
+//          Logger.LogAction("dialog != null");
+					if (dialog != null)
+					{
+//            Logger.LogAction("Set downloadProgressDialog field.");
+						downloadProgressDialog = dialog;
+					}
+					else
+					{
+//            Logger.LogAction("downloadProgressDialog not set.");
+					}
+				}
 			}
 		}
 
 		private void HandleFileSaveDialog(Window window)
 		{
-            var fileNameHandle = NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit");
-            var fileNameHwnd = new Hwnd(fileNameHandle);
+			IntPtr usernameControlHandle = NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit");
 
-            fileNameHwnd.SetFocus();
-            fileNameHwnd.SendString(saveAsFilename);
+			NativeMethods.SetForegroundWindow(usernameControlHandle);
+			NativeMethods.SetActiveWindow(usernameControlHandle);
 
-            var openButton = new WinButton(1, window.Hwnd);
-            openButton.Click();
+			System.Windows.Forms.SendKeys.SendWait(saveAsFilename + "{ENTER}");
 		}
 	}
 }

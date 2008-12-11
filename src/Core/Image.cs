@@ -18,6 +18,7 @@
 
 using System;
 using System.Collections;
+using mshtml;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
@@ -25,7 +26,11 @@ namespace WatiN.Core
 	/// <summary>
 	/// This class provides specialized functionality for a HTML img element.
 	/// </summary>
+#if NET11
+	public class Image : Element
+#else
     public class Image : Element<Image>
+#endif
 	{
 		private static ArrayList elementTags;
 
@@ -35,14 +40,17 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList {new ElementTag("img"), new ElementTag("input", "image")};
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("img"));
+					elementTags.Add(new ElementTag("input", "image"));
 				}
 
 				return elementTags;
 			}
 		}
 
-        public Image(DomContainer domContainer, INativeElement element) : base(domContainer, element) { }
+        public Image(DomContainer domContainer, IHTMLElement element) :
+            base(domContainer, domContainer.NativeBrowser.CreateElement(element)) { }
 
 		public Image(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder) {}
 
@@ -84,7 +92,7 @@ namespace WatiN.Core
 			}
 		}
 
-		internal new static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
 			return new Image(domContainer, element);
 		}

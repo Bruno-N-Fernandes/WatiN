@@ -17,7 +17,7 @@
 #endregion Copyright
 
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using WatiN.Core.Constraints;
 using WatiN.Core.Interfaces;
 
@@ -26,7 +26,11 @@ namespace WatiN.Core
 	/// <summary>
 	/// A typed collection of <see cref="Para" /> instances within a <see cref="Document"/> or <see cref="Element"/>.
 	/// </summary>
+#if NET11
+	public class ParaCollection : BaseElementCollection
+#else
     public class ParaCollection : BaseElementCollection<Para>
+#endif	
     {
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ParaCollection"/> class.
@@ -34,7 +38,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="finder">The finder.</param>
-		public ParaCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, Para.New) {}
+		public ParaCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, new CreateElementInstance(Para.New)) {}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ParaCollection"/> class.
@@ -42,7 +46,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="elements">The elements.</param>
-        public ParaCollection(DomContainer domContainer, IEnumerable<INativeElement> elements) : base(domContainer, elements, Para.New) { }
+		public ParaCollection(DomContainer domContainer, ArrayList elements) : base(domContainer, elements, new CreateElementInstance(Para.New)) {}
 
 		/// <summary>
 		/// Gets the <see cref="Para"/> at the specified index.
@@ -50,7 +54,7 @@ namespace WatiN.Core
 		/// <value></value>
 		public Para this[int index]
 		{
-			get { return ElementsTyped(index); }
+			get { return (Para)ElementsTyped(index); }
 		}
 
 		public ParaCollection Filter(BaseConstraint findBy)
@@ -58,9 +62,12 @@ namespace WatiN.Core
 			return new ParaCollection(domContainer, DoFilter(findBy));
 		}
 
+#if !NET11
         public ParaCollection Filter(Predicate<Para> predicate)
         {
             return new ParaCollection(domContainer, DoFilter(Find.ByElement(predicate)));
         }
+#endif
+
 	}
 }

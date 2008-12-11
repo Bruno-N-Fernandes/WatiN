@@ -30,10 +30,11 @@ namespace WatiN.Core
 	/// </summary>
 	public abstract class DomContainer : Document
 	{
-		private INativeDocument _nativeDocument;
-	    private bool _disposed;
+		private IHTMLDocument2 _htmlDocument;
+		private DialogWatcher _dialogWatcher;
+		private bool _disposed = false;
 
-	    protected DomContainer()
+		public DomContainer()
 		{
 			DomContainer = this;
 		}
@@ -59,21 +60,21 @@ namespace WatiN.Core
 		/// <summary>
 		/// This method must be overriden by all sub classes
 		/// </summary>
-		public abstract INativeDocument OnGetNativeDocument();
+		public abstract IHTMLDocument2 OnGetHtmlDocument();
 
 		/// <summary>
 		/// Returns the 'raw' html document for the internet explorer DOM.
 		/// </summary>
-		public override INativeDocument NativeDocument
+		public override IHTMLDocument2 HtmlDocument
 		{
 			get
 			{
-				if (_nativeDocument == null)
+				if (_htmlDocument == null)
 				{
-					_nativeDocument = OnGetNativeDocument();
+					_htmlDocument = OnGetHtmlDocument();
 				}
 
-				return _nativeDocument;
+				return _htmlDocument;
 			}
 		}
 
@@ -82,19 +83,23 @@ namespace WatiN.Core
 		/// </summary>
 		protected void StartDialogWatcher()
 		{
-		    if (!Settings.AutoStartDialogWatcher || DialogWatcher != null) return;
-		    
-            DialogWatcher = DialogWatcher.GetDialogWatcherForProcess(ProcessID);
-		    DialogWatcher.IncreaseReferenceCount();
+			if (Settings.AutoStartDialogWatcher && _dialogWatcher == null)
+			{
+				_dialogWatcher = DialogWatcher.GetDialogWatcherForProcess(ProcessID);
+				_dialogWatcher.IncreaseReferenceCount();
+			}
 		}
 
-	    /// <summary>
-	    /// Gets the dialog watcher.
-	    /// </summary>
-	    /// <value>The dialog watcher.</value>
-	    public DialogWatcher DialogWatcher { get; private set; }
+		/// <summary>
+		/// Gets the dialog watcher.
+		/// </summary>
+		/// <value>The dialog watcher.</value>
+		public DialogWatcher DialogWatcher
+		{
+			get { return _dialogWatcher; }
+		}
 
-	    public abstract INativeBrowser NativeBrowser
+		public abstract INativeBrowser NativeBrowser
 		{
 			get;
 		}
@@ -123,17 +128,18 @@ namespace WatiN.Core
 		/// </summary>
 		protected override void Dispose(bool disposing)
 		{
-		    if (_disposed) return;
-		    
-            _nativeDocument = null;
-		    if (DialogWatcher != null)
-		    {
-		        DialogWatcher.DecreaseReferenceCount();
-		        DialogWatcher = null;
-		    }
-		    _disposed = true;
+			if (!_disposed)
+			{
+				_htmlDocument = null;
+				if (_dialogWatcher != null)
+				{
+					DialogWatcher.DecreaseReferenceCount();
+					_dialogWatcher = null;
+				}
+				_disposed = true;
 
-		    base.Dispose(true);
+				base.Dispose(true);
+			}
 		}
 
 		/// <summary>
@@ -172,7 +178,7 @@ namespace WatiN.Core
 		/// <param name="filename">The filename.</param>
         public void CaptureWebPageToFile(string filename)
 		{
-			var captureWebPage = new CaptureWebPage(this);
+			CaptureWebPage captureWebPage = new CaptureWebPage(this);
 			captureWebPage.CaptureWebPageToFile(filename, false, false, 100, 100);
 		}
 

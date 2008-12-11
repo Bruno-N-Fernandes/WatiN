@@ -17,14 +17,13 @@
 #endregion Copyright
 
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.Collections.Specialized;
 using System.Text;
 using System.Threading;
 using mshtml;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
-using WatiN.Core.InternetExplorer;
 using WatiN.Core.Logging;
 
 namespace WatiN.Core
@@ -56,7 +55,7 @@ namespace WatiN.Core
 		public static void DumpElements(Document document, ILogWriter logWriter)
 		{
 			logWriter.LogAction("Dump:");
-			var elements = elementCollection(document);
+			IHTMLElementCollection elements = elementCollection(document);
 			foreach (IHTMLElement e in elements)
 			{
 				logWriter.LogAction("id = " + e.id);
@@ -80,7 +79,7 @@ namespace WatiN.Core
 		public static void DumpElementsWithHtmlSource(Document document, ILogWriter logWriter)
 		{
 			logWriter.LogAction("Dump:==================================================");
-			var elements = elementCollection(document);
+			IHTMLElementCollection elements = elementCollection(document);
 			foreach (IHTMLElement e in elements)
 			{
 				logWriter.LogAction("------------------------- " + e.id);
@@ -104,14 +103,14 @@ namespace WatiN.Core
 		/// <param name="logWriter">The log writer.</param>
 		public static void DumpFrames(Document document, ILogWriter logWriter)
 		{
-			var frames = document.Frames;
+			FrameCollection frames = document.Frames;
 
-			logWriter.LogAction("There are " + frames.Length + " Frames");
+			logWriter.LogAction("There are " + frames.Length.ToString() + " Frames");
 
-			var index = 0;
+			int index = 0;
 			foreach (Frame frame in frames)
 			{
-				logWriter.LogAction("Frame index: " + index);
+				logWriter.LogAction("Frame index: " + index.ToString());
 				logWriter.LogAction(" name: " + frame.Name);
 				logWriter.LogAction(" scr: " + frame.Url);
 
@@ -128,7 +127,7 @@ namespace WatiN.Core
 		/// </returns>
 		public static bool IsNullOrEmpty(string value)
 		{
-			return (string.IsNullOrEmpty(value));
+			return (value == null || value.Length == 0);
 		}
 
 		/// <summary>
@@ -161,7 +160,7 @@ namespace WatiN.Core
 
 		private static IHTMLElementCollection elementCollection(Document document)
 		{
-			return ((IHTMLDocument2)document.NativeDocument.Object).all;
+			return document.HtmlDocument.all;
 		}
 
 		/// <summary>
@@ -174,7 +173,7 @@ namespace WatiN.Core
 		{
 			if (hWnd == IntPtr.Zero) return false;
 
-			var className = NativeMethods.GetClassName(hWnd);
+			string className = NativeMethods.GetClassName(hWnd);
 
 			return className.Equals(expectedClassName);
 		}
@@ -184,14 +183,14 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="elementCollection">The element collection.</param>
 		/// <returns>an array list with all the elements found in the element collection</returns>
-		internal static IEnumerable<INativeElement> IHtmlElementCollectionToArrayList(IHTMLElementCollection elementCollection)
+		internal static ArrayList IHtmlElementCollectionToArrayList(IHTMLElementCollection elementCollection)
 		{
-			var elements = new List<INativeElement>();
-			var length = elementCollection.length;
+			ArrayList elements = new ArrayList();
+			int length = elementCollection.length;
 
-			for (var index = 0; index < length; index++)
+			for (int index = 0; index < length; index++)
 			{
-				elements.Add(new IEElement(elementCollection.item(index, null)));
+				elements.Add(elementCollection.item(index, null));
 			}
 
 			return elements;
@@ -221,7 +220,7 @@ namespace WatiN.Core
 			}
 			catch (Exception ex)
 			{
-				throw new RunScriptException(ex);
+				throw new WatiN.Core.Exceptions.RunScriptException(ex);
 			}
 		}
 
@@ -232,9 +231,10 @@ namespace WatiN.Core
 		/// <param name="eventName">Name of the event to fire</param>
 		public static void FireEvent(DispHTMLBaseElement element, string eventName)
 		{
-			var collection = new NameValueCollection {{"button", "1"}};
+			NameValueCollection collection = new NameValueCollection();
+			collection.Add("button", "1");
 
-		    FireEvent(element, eventName, collection);
+			FireEvent(element, eventName, collection);
 		}
 
 		/// <summary>
@@ -245,11 +245,11 @@ namespace WatiN.Core
 		/// <param name="eventObjectProperties">The event object properties.</param>
 		public static void FireEvent(DispHTMLBaseElement element, string eventName, NameValueCollection eventObjectProperties)
 		{
-		    var scriptCode = CreateJavaScriptFireEventCode(eventObjectProperties, element, eventName);
+		    StringBuilder scriptCode = CreateJavaScriptFireEventCode(eventObjectProperties, element, eventName);
 
 		    try
 			{
-				var window = ((IHTMLDocument2) element.document).parentWindow;
+				IHTMLWindow2 window = ((IHTMLDocument2) element.document).parentWindow;
 				RunScript(scriptCode.ToString(), window);
 			}
 			catch (RunScriptException)
@@ -260,12 +260,12 @@ namespace WatiN.Core
 				object dummyEvt = null;
 				object parentEvt = ((IHTMLDocument4) element.document).CreateEventObject(ref dummyEvt);
 
-				var eventObj = (IHTMLEventObj2) parentEvt;
+				IHTMLEventObj2 eventObj = (IHTMLEventObj2) parentEvt;
 
-				for (var index = 0; index < eventObjectProperties.Count; index++)
+				for (int index = 0; index < eventObjectProperties.Count; index++)
 				{
-					var property = eventObjectProperties.GetKey(index);
-					var value = eventObjectProperties.GetValues(index)[0];
+					string property = eventObjectProperties.GetKey(index);
+					string value = eventObjectProperties.GetValues(index)[0];
 
 					eventObj.setAttribute(property, value, 0);
 				}
@@ -276,7 +276,7 @@ namespace WatiN.Core
 
 	    public static StringBuilder CreateJavaScriptFireEventCode(NameValueCollection eventObjectProperties, DispHTMLBaseElement element, string eventName)
 	    {
-	        var scriptCode = new StringBuilder();
+	        StringBuilder scriptCode = new StringBuilder();
 	        scriptCode.Append("var newEvt = document.createEventObject();");
 
 	        CreateJavaScriptEventObject(scriptCode, eventObjectProperties);
@@ -289,7 +289,7 @@ namespace WatiN.Core
 	    {
             if (eventObjectProperties == null) return;
 
-            for (var index = 0; index < eventObjectProperties.Count; index++)
+            for (int index = 0; index < eventObjectProperties.Count; index++)
 	        {
 	            scriptCode.Append("newEvt.");
 	            scriptCode.Append(eventObjectProperties.GetKey(index));
@@ -301,19 +301,22 @@ namespace WatiN.Core
 
         public static void AsyncActionOnBrowser(ThreadStart action)
         {
-            var clickButton = new Thread(action);
+            Thread clickButton = new Thread(action);
+#if !NET11
             clickButton.SetApartmentState(ApartmentState.STA);
-            
+#else
+            clickButton.ApartmentState = ApartmentState.STA;
+#endif
             clickButton.Start();
             clickButton.Join(500);
         }
 
 	    public static string StringArrayToString(string[] inputtypes, string seperator)
 		{
-			var inputtypesString = "";
+			string inputtypesString = "";
 			if (inputtypes.Length > 0)
 			{
-				foreach (var inputtype in inputtypes)
+				foreach (string inputtype in inputtypes)
 				{
 					inputtypesString += inputtype + seperator;
 				}
@@ -330,16 +333,16 @@ namespace WatiN.Core
 			{
 				string returnvalue = null;
 
-				foreach (var c in value)
+				foreach (char c in value)
 				{
 					if(sendKeysCharactersToBeEscaped.IndexOf(c) != -1)
 					{
 						// Escape sendkeys special characters
-						returnvalue = returnvalue + "{" + c + "}";
+						returnvalue = returnvalue + "{" + c.ToString() + "}";
 					}
 					else
 					{
-						returnvalue = returnvalue + c;
+						returnvalue = returnvalue + c.ToString();
 					}
 				}
 				return returnvalue;
@@ -347,20 +350,5 @@ namespace WatiN.Core
 
 			return value;
 		}
-
-	    public static Uri CreateUri(string url)
-        {
-            Uri uri;
-            try
-            {
-                uri = new Uri(url);
-            }
-            catch (UriFormatException)
-            {
-                uri = new Uri("http://" + url);
-            }
-            return uri;
-        }
-
 	}
 }

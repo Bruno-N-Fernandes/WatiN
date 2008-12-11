@@ -1,4 +1,4 @@
-#if SPEEDTEST
+﻿#if SPEEDTEST
 using System;
 using NUnit.Framework;
 using System.Linq;
@@ -88,9 +88,9 @@ namespace WatiN.Core.UnitTests.DotNet35
 //        {
 //            System.GC.Collect();
 //            var ticksStart = DateTime.Now.Ticks;
-//            var nativeElement = ie.Div(Find.First()).Object;
-//            var idivElement = (IHTMLDivElement) nativeElement.Object;
-//            var ihtmlElement = (IHTMLElement) nativeElement.Object;
+//            var nativeElement = ie.Div(Find.First()).NativeElement;
+//            var idivElement = (IHTMLDivElement) nativeElement.NativeElement;
+//            var ihtmlElement = (IHTMLElement) nativeElement.NativeElement;
 //
 //            for (var i = 0; i < 500; i++)
 //            

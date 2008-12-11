@@ -16,13 +16,30 @@
 
 #endregion Copyright
 
+#region WatiN Copyright (C) 2006-2008 Jeroen van Menen
+
+//Copyright 2006-2008 Jeroen van Menen
+//
+//   Licensed under the Apache License, Version 2.0 (the "License");
+//   you may not use this file except in compliance with the License.
+//   You may obtain a copy of the License at
+//
+//       http://www.apache.org/licenses/LICENSE-2.0
+//
+//   Unless required by applicable law or agreed to in writing, software
+//   distributed under the License is distributed on an "AS IS" BASIS,
+//   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//   See the License for the specific language governing permissions and
+//   limitations under the License.
+
+#endregion Copyright
+
 using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Threading;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Logging;
-using WatiN.Core.UtilityClasses;
 
 namespace WatiN.Core.DialogHandlers
 {
@@ -33,13 +50,14 @@ namespace WatiN.Core.DialogHandlers
 	/// </summary>
 	public class DialogWatcher : IDisposable
 	{
-		private readonly int ieProcessId;
+		private int ieProcessId;
 		private bool keepRunning = true;
-		private readonly ArrayList handlers = new ArrayList();
-		private readonly Thread watcherThread;
+		private ArrayList handlers = new ArrayList();
+		private Thread watcherThread;
 		private bool closeUnhandledDialogs = Settings.AutoCloseDialogs;
+		private int referenceCount = 0;
 
-	    private static ArrayList dialogWatchers = new ArrayList();
+		private static ArrayList dialogWatchers = new ArrayList();
 		private Exception lastException;
 
 		/// <summary>
@@ -84,7 +102,7 @@ namespace WatiN.Core.DialogHandlers
 
 		public static void CleanupDialogWatcherCache()
 		{
-			var cleanedupDialogWatcherCache = new ArrayList();
+			ArrayList cleanedupDialogWatcherCache = new ArrayList();
 
 			foreach (DialogWatcher dialogWatcher in dialogWatchers)
 			{
@@ -114,7 +132,7 @@ namespace WatiN.Core.DialogHandlers
 			handlers = new ArrayList();
 
 			// Create thread to watch windows
-			watcherThread = new Thread(Start);
+			watcherThread = new Thread(new ThreadStart(Start));
 			// Start the thread.
 			watcherThread.Start();
 		}
@@ -124,7 +142,7 @@ namespace WatiN.Core.DialogHandlers
 		/// </summary>
 		public void IncreaseReferenceCount()
 		{
-			ReferenceCount++;
+			referenceCount++;
 		}
 
 		/// <summary>
@@ -137,7 +155,7 @@ namespace WatiN.Core.DialogHandlers
 		{
 			if (ReferenceCount > 0)
 			{
-				ReferenceCount--;
+				referenceCount--;
 			}
 			else
 			{
@@ -247,7 +265,7 @@ namespace WatiN.Core.DialogHandlers
 
 		/// <summary>
 		/// Gets or sets a value indicating whether unhandled dialogs should be closed automaticaly.
-		/// The initial value is set to the value of <cref name="Settings.AutoCloseDialogs" />.
+		/// The initial value is set to the value of <paramref name="Settings.AutoCloseDialogs" />.
 		/// </summary>
 		/// <value>
 		/// 	<c>true</c> if unhandled dialogs should be closed automaticaly; otherwise, <c>false</c>.
@@ -287,7 +305,7 @@ namespace WatiN.Core.DialogHandlers
 		{
 			while (keepRunning)
 			{
-				var process = getProcess(ProcessId);
+				Process process = getProcess(ProcessId);
 
 				if (process != null)
 				{
@@ -295,14 +313,14 @@ namespace WatiN.Core.DialogHandlers
 					{
                         if (!keepRunning) return;
 
-						var threadId = t.Id;
+						int threadId = t.Id;
 
-						NativeMethods.EnumThreadProc callbackProc = myEnumThreadWindowsProc;
+						NativeMethods.EnumThreadProc callbackProc = new NativeMethods.EnumThreadProc(myEnumThreadWindowsProc);
 						NativeMethods.EnumThreadWindows(threadId, callbackProc, IntPtr.Zero);
 					}
 
 					// Keep DialogWatcher responsive during 1 second sleep period
-					var count = 0;
+					int count = 0;
 					while (keepRunning && count < 5)
 					{
 						Thread.Sleep(200);
@@ -331,9 +349,12 @@ namespace WatiN.Core.DialogHandlers
 			get { return (getProcess(ProcessId) != null); }
 		}
 
-	    public int ReferenceCount { get; private set; }
+		public int ReferenceCount
+		{
+			get { return referenceCount; }
+		}
 
-	    private static Process getProcess(int processId)
+		private Process getProcess(int processId)
 		{
 			Process process;
 			try
@@ -378,36 +399,38 @@ namespace WatiN.Core.DialogHandlers
 		/// <param name="window">The window.</param>
 		public void HandleWindow(Window window)
 		{
-		    if (!window.IsDialog()) return;
+			if (window.IsDialog())
+			{
+				WaitUntilVisibleOrTimeOut(window);
 
-            WaitUntilVisibleOrTimeOut(window);
+				// Lock the thread and see if a handler will handle
+				// this dialog window
+				lock (this)
+				{
+					foreach (IDialogHandler dialogHandler in handlers)
+					{
+						try
+						{
+							if (dialogHandler.HandleDialog(window)) return;
+						}
+						catch (Exception e)
+						{
+							lastException = e;
 
-		    // Lock the thread and see if a handler will handle
-		    // this dialog window
-		    lock (this)
-		    {
-		        foreach (IDialogHandler dialogHandler in handlers)
-		        {
-		            try
-		            {
-		                if (dialogHandler.HandleDialog(window)) return;
-		            }
-		            catch (Exception e)
-		            {
-		                lastException = e;
+							Logger.LogAction("Exception was thrown while DialogWatcher called HandleDialog:");
+							Logger.LogAction(e.ToString());
+						}
+					}
 
-		                Logger.LogAction("Exception was thrown while DialogWatcher called HandleDialog:");
-		                Logger.LogAction(e.ToString());
-		            }
-		        }
-
-		        // If no handler handled the dialog, see if the dialog
-		        // should be closed automatically.
-		        if (!CloseUnhandledDialogs) return;
-		        
-                Logger.LogAction("Auto closing dialog with title '{0}'.", window.Title);
-		        window.ForceClose();
-		    }
+					// If no handler handled the dialog, see if the dialog
+					// should be closed automatically.
+					if (CloseUnhandledDialogs)
+					{
+						Logger.LogAction("Auto closing dialog with title '{0}'.", window.Title);
+						window.ForceClose();
+					}
+				}
+			}
 		}
 
 		private static void WaitUntilVisibleOrTimeOut(Window window)
@@ -415,13 +438,16 @@ namespace WatiN.Core.DialogHandlers
 			// Wait untill window is visible so all properties
 			// of the window class (like Style and StyleInHex)
 			// will return valid values.
-		    var tryActionUntilTimeOut = new TryActionUntilTimeOut(Settings.WaitForCompleteTimeOut);
-		    var success = tryActionUntilTimeOut.Try(() => window.Visible );
+			SimpleTimer timer = new SimpleTimer(Settings.WaitForCompleteTimeOut);
 
-            if (!success)
-            {
-                Logger.LogAction("Dialog with title '{0}' not visible after {1} seconds.", window.Title, Settings.WaitForCompleteTimeOut);
-            }
+			do
+			{
+				if (window.Visible) return;
+
+				Thread.Sleep(50);
+			} while (!timer.Elapsed);
+
+			Logger.LogAction("Dialog with title '{0}' not visible after {1} seconds.", window.Title, Settings.WaitForCompleteTimeOut);
 		}
 
 		#region IDisposable Members

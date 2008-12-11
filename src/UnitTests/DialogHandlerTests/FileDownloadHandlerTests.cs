@@ -28,9 +28,9 @@ namespace WatiN.Core.UnitTests.DialogHandlerTests
 		[Test, Ignore("Because of timeout issues, run this test manually and not automated"), Category("InternetConnectionNeeded")]
 		public void DownloadOpen()
 		{
-			var dhdl = new FileDownloadHandler(FileDownloadOptionEnum.Open);
+			WatiN.Core.DialogHandlers.FileDownloadHandler dhdl = new WatiN.Core.DialogHandlers.FileDownloadHandler(WatiN.Core.DialogHandlers.FileDownloadOptionEnum.Open);
 
-			var ie = new IE();
+			IE ie = new IE();
 			ie.AddDialogHandler(dhdl);
 			ie.WaitForComplete();
 			ie.GoTo("http://watin.sourceforge.net/WatiNRecorder.zip");
@@ -43,13 +43,13 @@ namespace WatiN.Core.UnitTests.DialogHandlerTests
 		[Test, Ignore("Because of timeout issues, run this test manually and not automated"), Category("InternetConnectionNeeded")]
 		public void DownloadSave()
 		{
-			var file = new FileInfo(@"c:\temp\test.zip");
+			FileInfo file = new FileInfo(@"c:\temp\test.zip");
 			file.Directory.Create();
 			file.Delete();
 
-			var fileDownloadHandler = new FileDownloadHandler(file.FullName);
+			FileDownloadHandler fileDownloadHandler = new FileDownloadHandler(file.FullName);
 
-			using (var ie = new IE())
+			using (IE ie = new IE())
 			{
 				ie.AddDialogHandler(fileDownloadHandler);
 
@@ -66,8 +66,8 @@ namespace WatiN.Core.UnitTests.DialogHandlerTests
 		[Test, Ignore("Because of timeout issues, run this test manually and not automated"), Category("InternetConnectionNeeded")]
 		public void DownloadRun()
 		{
-			var dhdl = new FileDownloadHandler(FileDownloadOptionEnum.Run);
-			var ie = new IE();
+			WatiN.Core.DialogHandlers.FileDownloadHandler dhdl = new WatiN.Core.DialogHandlers.FileDownloadHandler(WatiN.Core.DialogHandlers.FileDownloadOptionEnum.Run);
+			IE ie = new IE();
 			ie.AddDialogHandler(dhdl);
 			ie.WaitForComplete();
 			ie.GoTo("http://watin.sourceforge.net/WatiN-1.0.0.4000-net-1.1.msi");

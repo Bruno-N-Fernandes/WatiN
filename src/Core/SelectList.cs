@@ -32,7 +32,11 @@ namespace WatiN.Core
 	/// <summary>
 	/// This class provides specialized functionality for a HTML select element.
 	/// </summary>
+#if NET11
+    public class SelectList : Element
+#else
     public class SelectList : Element<SelectList>
+#endif
 	{
 		private static ArrayList elementTags;
 
@@ -46,7 +50,8 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList {new ElementTag("select")};
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("select"));
 				}
 
 				return elementTags;
@@ -59,7 +64,8 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The <see cref="DomContainer"/> the element is in.</param>
         /// <param name="element">The HTML select element.</param>
-        public SelectList(DomContainer domContainer, INativeElement element) : base(domContainer, element) { }
+        public SelectList(DomContainer domContainer, IHTMLElement element) :
+            base(domContainer, domContainer.NativeBrowser.CreateElement(element)) { }
 
 		/// <summary>
 		/// Returns an instance of a SelectList object.
@@ -124,7 +130,7 @@ namespace WatiN.Core
 		/// <param name="regex">The regex.</param>
 		public void Select(Regex regex)
 		{
-			Logger.LogAction("Selecting text using regular expresson '" + regex + "' in " + GetType().Name + " '" + Id + "'");
+			Logger.LogAction("Selecting text using regular expresson '" + regex.ToString() + "' in " + GetType().Name + " '" + Id + "'");
 
 			SelectByTextOrValue(Find.ByText(regex));
 		}
@@ -148,7 +154,7 @@ namespace WatiN.Core
 		/// <param name="regex">The regex.</param>
 		public void SelectByValue(Regex regex)
 		{
-			Logger.LogAction("Selecting text using regular expresson '" + regex + "' in " + GetType().Name + " '" + Id + "'");
+			Logger.LogAction("Selecting text using regular expresson '" + regex.ToString() + "' in " + GetType().Name + " '" + Id + "'");
 
 			SelectByTextOrValue(Find.ByValue(regex));
 		}
@@ -161,7 +167,7 @@ namespace WatiN.Core
 		{
 			get
 			{
-				var items = new StringCollection();
+				StringCollection items = new StringCollection();
 
 				foreach (Option option in Options)
 				{
@@ -202,6 +208,7 @@ namespace WatiN.Core
 			return ElementsSupport.Option(DomContainer, findBy, new ElementCollection(this));
 		}
 
+#if !NET11
         /// <summary>
 		/// Returns the <see cref="Options" /> which matches the specified expression.
 		/// </summary>
@@ -211,6 +218,7 @@ namespace WatiN.Core
 		{
 			return Option(Find.ByElement((predicate)));
 		}
+#endif
 
 		/// <summary>
 		/// Returns all the <see cref="Core.Option"/> elements in the <see cref="SelectList"/>.
@@ -227,9 +235,9 @@ namespace WatiN.Core
 		{
 			get
 			{
-				var items = new ArrayList();
+				ArrayList items = new ArrayList();
 
-				var options = Options.Filter(GetIsSelectedAttribute());
+				OptionCollection options = Options.Filter(GetIsSelectedAttribute());
 				foreach (Option option in options)
 				{
 					if (option.Selected)
@@ -249,9 +257,9 @@ namespace WatiN.Core
 		{
 			get
 			{
-				var items = new StringCollection();
+				StringCollection items = new StringCollection();
 
-				var options = Options.Filter(GetIsSelectedAttribute());
+				OptionCollection options = Options.Filter(GetIsSelectedAttribute());
 				foreach (Option option in options)
 				{
 					items.Add(option.Text);
@@ -336,24 +344,20 @@ namespace WatiN.Core
 
 		public class ElementCollection : IElementCollection
 		{
-			private readonly SelectList selectlist;
+			private SelectList selectlist;
 
 			public ElementCollection(SelectList selectList)
 			{
 				selectlist = selectList;
 			}
 
-			public object Elements
+			public IHTMLElementCollection Elements
 			{
-				get
-				{
-				    var element = (IHTMLElement) selectlist.NativeElement.Object;
-                    return (IHTMLElementCollection)element.all;
-				}
+				get { return (IHTMLElementCollection) selectlist.htmlElement.all; }
 			}
 		}
 
-		internal new static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
 			return new SelectList(domContainer, element);
 		}

@@ -19,22 +19,23 @@
 using System;
 using System.Text.RegularExpressions;
 using System.Threading;
-using Moq;
 using mshtml;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
+using Rhino.Mocks;
 using WatiN.Core.Comparers;
-using WatiN.Core.Constraints;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
 using WatiN.Core.InternetExplorer;
 using StringComparer=WatiN.Core.Comparers.StringComparer;
+using Iz=NUnit.Framework.SyntaxHelpers.Is;
+using Texzt=NUnit.Framework.SyntaxHelpers.Text;
 
 namespace WatiN.Core.UnitTests
 {
 	[TestFixture]
 	public class ElementTests : BaseWithIETests
 	{
+		private MockRepository mocks;
 		private Element element;
 
 		public override Uri TestPageUri
@@ -57,100 +58,106 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void AncestorTypeShouldReturnTypedElement()
 		{
-			var tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
+			TableCell tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
 			Assert.IsInstanceOfType(typeof (Div), tableCell.Ancestor(typeof (Div)));
 		}
 
 		[Test]
 		public void AncestorTagNameShouldReturnTypedElement()
 		{
-			var tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
+			TableCell tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
 			Assert.IsInstanceOfType(typeof (Div), tableCell.Ancestor("Div"));
 		}
 
 		[Test]
 		public void AncestorAttributeConstraintShouldReturnTypedElement()
 		{
-			var tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
+			TableCell tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
 			Assert.IsInstanceOfType(typeof (Div), tableCell.Ancestor(Find.ById("divid")));
 		}
 
 		[Test]
 		public void AncestorTypeAndAttributeConstraintShouldReturnTypedElement()
 		{
-		    var tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
-            var ancestor = tableCell.Ancestor(typeof(Div), Find.ById("divid"));
+		    TableCell tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
+            Element ancestor = tableCell.Ancestor(typeof(Div), Find.ById("divid"));
 
             Assert.IsInstanceOfType(typeof(Div), ancestor);
-            Assert.That(ancestor.Id, Is.EqualTo("divid"));
+            Assert.That(ancestor.Id, Iz.EqualTo("divid"));
 		}
 
 	    [Test]
 		public void AncestorTagNameAndAttributeConstraintShouldReturnTypedElement()
 		{
-	        var nativeElementMock = new Mock<INativeElement>();
-			var firstParentDivMock = new Mock<INativeElement>();
-			var firstAttributeBagMock = new Mock<IAttributeBag>();
-			var secondParentDivMock = new Mock<INativeElement>();
-			var secondAttributeBagMock = new Mock<IAttributeBag>();
-            var domContainerMock = new Mock<DomContainer> (new object[] { });
+			MockRepository mockRepository = new MockRepository();
 
-			element = new Element(domContainerMock.Object, nativeElementMock.Object);
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			INativeElement firstParentDiv = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			IAttributeBag firstAttributeBag = (IAttributeBag) mockRepository.CreateMock(typeof (IAttributeBag));
+			INativeElement secondParentDiv = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			IAttributeBag secondAttributeBag = (IAttributeBag) mockRepository.CreateMock(typeof (IAttributeBag));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
 
-            nativeElementMock.Expect(native => native.Parent).Returns(firstParentDivMock.Object);
-			
-            firstParentDivMock.Expect(first => first.TagName).Returns("div");
-            firstParentDivMock.Expect(first => first.GetAttributeBag(domContainerMock.Object)).Returns(firstAttributeBagMock.Object);
-			
-            firstAttributeBagMock.Expect(bag => bag.GetValue("tagname")).Returns("div");
-			firstAttributeBagMock.Expect(bag => bag.GetValue("innertext")).Returns("first ancestor");
+			element = new Element(domContainer, nativeElement); 
+			Expect.Call(nativeElement.Parent).Return(firstParentDiv).Repeat.Any();
+			Expect.Call(firstParentDiv.TagName).Return("div").Repeat.Any();
+			Expect.Call(firstParentDiv.GetAttributeBag(domContainer)).Return(firstAttributeBag).Repeat.Any();
+			Expect.Call(firstAttributeBag.GetValue("tagname")).Return("div").Repeat.Any();
+			Expect.Call(firstAttributeBag.GetValue("innertext")).Return("first ancestor");
 
-			firstParentDivMock.Expect(first => first.Parent).Returns(secondParentDivMock.Object);
-			
-            secondParentDivMock.Expect(second => second.TagName).Returns("div");
-            secondParentDivMock.Expect(second => second.GetAttributeBag(domContainerMock.Object)).Returns(secondAttributeBagMock.Object);
-			
-            secondAttributeBagMock.Expect(bag => bag.GetValue("tagname")).Returns("div");
-			secondAttributeBagMock.Expect(bag => bag.GetValue("innertext")).Returns("second ancestor");
-			
-            secondParentDivMock.Expect(second => second.GetAttributeValue("innertext")).Returns("second ancestor");
+			Expect.Call(firstParentDiv.Parent).Return(secondParentDiv).Repeat.Any();
+			Expect.Call(secondParentDiv.TagName).Return("div").Repeat.Any();
+			Expect.Call(secondParentDiv.GetAttributeBag(domContainer)).Return(secondAttributeBag).Repeat.Any();
+			Expect.Call(secondAttributeBag.GetValue("tagname")).Return("div").Repeat.Any();
+			Expect.Call(secondAttributeBag.GetValue("innertext")).Return("second ancestor");
+			Expect.Call(secondParentDiv.GetAttributeValue("innertext")).Return("second ancestor");
 
-			var ancestor = element.Ancestor("Div", Find.ByText("second ancestor"));
+			mockRepository.ReplayAll();
+
+			Element ancestor = element.Ancestor("Div", Find.ByText("second ancestor"));
 
 			Assert.IsInstanceOfType(typeof (Div), ancestor);
-			Assert.That(ancestor.Text, Is.EqualTo("second ancestor"));
+			Assert.That(ancestor.Text, NUnit.Framework.SyntaxHelpers.Is.EqualTo("second ancestor"));
+
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void ElementParentShouldReturnNullWhenRootElement()
 		{
-			var nativeElementMock = new Mock<INativeElement>();
-            var domContainer = new Mock<DomContainer> (new object[] { }).Object;
+			MockRepository mockRepository = new MockRepository();
 
-			nativeElementMock.Expect(native => native.Parent).Returns((INativeElement) null);
-			element = new Element(domContainer, nativeElementMock.Object); 
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
+
+			element = new Element(domContainer, nativeElement); 
+			Expect.Call(nativeElement.Parent).Return(null);
+
+			mockRepository.ReplayAll();
 
 			Assert.IsNull(element.Parent);
 
-			nativeElementMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void ElementParentReturningTypedParent()
 		{
-			var tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
-			
-            Assert.IsInstanceOfType(typeof (TableRow), tableCell.Parent);
+			TableCell tableCell = ie.TableCell(Find.ByText("Contains text in DIV"));
+			Assert.IsInstanceOfType(typeof (TableRow), tableCell.Parent);
 		}
 
 		[Test]
 		public void ElementParentReturnsElementsContainerForUnknownElement()
 		{
-			var parent = ie.Form("Form").Parent;
-		    var container = parent as IElementsContainer;
-            
-            Assert.That(container, Is.Not.Null, "Should implement IElementsContainer");
+			Element parent = ie.Form("Form").Parent;
+		    IElementsContainer container = parent as IElementsContainer;
+            Assert.That(container, Iz.Not.Null, "Should implement IElementsContainer");
+#if NET11
+            Assert.IsTrue(parent.GetType().Equals(typeof(ElementsContainer)), "Should implement ElementsContainer");
+#else
             Assert.IsTrue(parent.GetType().Equals(typeof(ElementsContainer<Element>)), "Should be ElementsContainer<Element>");
+#endif
         }
 
 		[Test]
@@ -168,50 +175,60 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void ElementPreviousSiblingReturnsElementsContainerForUnknowElement()
 		{
-			var previous = ie.Div("NextAndPreviousTests").Div("last").PreviousSibling;
-		    var container = previous as IElementsContainer;
-            
-            Assert.That(container, Is.Not.Null, "Should implement IElementsContainer");
+			Element previous = ie.Div("NextAndPreviousTests").Div("last").PreviousSibling;
+		    IElementsContainer container = previous as IElementsContainer;
+            Assert.That(container, Iz.Not.Null, "Should implement IElementsContainer");
+#if NET11
+            Assert.IsTrue(previous.GetType().Equals(typeof(ElementsContainer)), "Should implement ElementsContainer");
+#else
             Assert.IsTrue(previous.GetType().Equals(typeof(ElementsContainer<Element>)), "Should be ElementsContainer<Element>");
+#endif
         }
 
 		[Test]
 		public void ElementNextSiblingShouldReturnNullWhenLastSibling()
 		{
-			var next = ie.Div("NextAndPreviousTests").Div("last").NextSibling;
-			
-            Assert.IsNull(next);
+			Element next = ie.Div("NextAndPreviousTests").Div("last").NextSibling;
+			Assert.IsNull(next);
 		}
 
 		[Test]
 		public void ElementNextSiblingReturningTypedParent()
 		{
-			var next = ie.Div("NextAndPreviousTests").Div("first").NextSibling;
-			
-            Assert.IsTrue(next.GetType().Equals(typeof (Span)));
+			Element next = ie.Div("NextAndPreviousTests").Div("first").NextSibling;
+			Assert.IsTrue(next.GetType().Equals(typeof (Span)));
 		}
 
 		[Test]
 		public void ElementNextSiblingReturnsElementsContainerForUnknowElement()
 		{
-			var next = ie.Div("NextAndPreviousTests").Span("second").NextSibling;
-		    var container = next as IElementsContainer;
-            
-            Assert.That(container, Is.Not.Null, "Should implement IElementsContainer");
+			Element next = ie.Div("NextAndPreviousTests").Span("second").NextSibling;
+		    IElementsContainer container = next as IElementsContainer;
+            Assert.That(container, Iz.Not.Null, "Should implement IElementsContainer");
+#if NET11
+			Assert.IsTrue(next.GetType().Equals(typeof (ElementsContainer)), "Should be ElementsContainer");
+#else
             Assert.IsTrue(next.GetType().Equals(typeof (ElementsContainer<Element>)), "Should be ElementsContainer<Element>");
+#endif
         }
 
 		[Test]
 		public void ElementRefresh()
 		{
-			var finderMock = new Mock<INativeElementFinder>();
-			var nativeElementMock = new Mock<INativeElement>();
-            var domContainer = new Mock<DomContainer>( new object[] { });
+			mocks = new MockRepository();
 
-			finderMock.Expect(finder => finder.FindFirst()).Returns(nativeElementMock.Object).AtMost(2);
-			nativeElementMock.Expect(native => native.GetAttributeValue("tagName")).Returns("mockedtag");
+			INativeElementFinder finder = (INativeElementFinder) mocks.CreateMock(typeof (INativeElementFinder));
+			INativeElement nativeElement = (INativeElement) mocks.CreateMock(typeof (INativeElement));
+            DomContainer domContainer = (DomContainer) mocks.DynamicMock(typeof(DomContainer), new object[] { });
 
-            element = new Element(domContainer.Object, finderMock.Object);
+			element = new Element(domContainer, finder);
+
+			Expect.Call(finder.FindFirst()).Return(nativeElement).Repeat.Twice();
+			SetupResult.For(nativeElement.GetAttributeValue("tagName")).Return("mockedtag");
+
+			mocks.ReplayAll();
+
+			element = new Element(domContainer, finder);
 
 			Assert.AreEqual("mockedtag", element.TagName);
 
@@ -219,7 +236,7 @@ namespace WatiN.Core.UnitTests
 
 			Assert.AreEqual("mockedtag", element.TagName);
 
-			finderMock.VerifyAll();
+			mocks.VerifyAll();
 		}
 
 		[Test, ExpectedException(typeof (ArgumentException))]
@@ -234,9 +251,13 @@ namespace WatiN.Core.UnitTests
 		{
 			element = ie.Element(Find.ById("table1"));
 
-		    var container = element as IElementsContainer;
-            Assert.That(container, Is.Not.Null, "Should implement IElementsContainer");
+		    IElementsContainer container = element as IElementsContainer;
+            Assert.That(container, Iz.Not.Null, "Should implement IElementsContainer");
+#if NET11
+			Assert.IsAssignableFrom(typeof(ElementsContainer), element, "The returned object form ie.Element should be castable to ElementsContainer");
+#else
             Assert.IsAssignableFrom(typeof(ElementsContainer<Element>), element, "The returned object form ie.Element should be castable to ElementsContainer<Element>");
+#endif
 
 			Assert.IsNotNull(element, "Element not found");
 
@@ -250,9 +271,8 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual("table", element.TagName.ToLower(), "Invalid tagname");
 
 			// Textbefore and TextAfter tests
-			var checkBox = ie.CheckBox("Checkbox21");
-			
-            Assert.AreEqual("Test label before: ", checkBox.TextBefore, "Unexpected checkBox.TextBefore");
+			CheckBox checkBox = ie.CheckBox("Checkbox21");
+			Assert.AreEqual("Test label before: ", checkBox.TextBefore, "Unexpected checkBox.TextBefore");
 			Assert.AreEqual(" Test label after", checkBox.TextAfter, "Unexpected checkBox.TextAfter");
 		}
 
@@ -293,21 +313,25 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void ElementCollectionShouldReturnTypedElements()
 		{
-			var elements = ie.Div("NextAndPreviousTests").Elements;
+			ElementCollection elements = ie.Div("NextAndPreviousTests").Elements;
 			Assert.IsTrue(elements[0].GetType().Equals(typeof (Div)), "Element 0 should be a div");
 			Assert.IsTrue(elements[1].GetType().Equals(typeof (Span)), "Element 1 should be a span");
 
-		    var container = elements[2] as IElementsContainer;
-            Assert.That(container, Is.Not.Null, "Element 2 should be an IElementsContainer");
+		    IElementsContainer container = elements[2] as IElementsContainer;
+            Assert.That(container, Iz.Not.Null, "Element 2 should be an IElementsContainer");
+#if NET11
+            Assert.IsTrue(elements[2].GetType().Equals(typeof (ElementsContainer)), "Element 2 should be an ElementsContainer");
+#else
             Assert.IsTrue(elements[2].GetType().Equals(typeof(ElementsContainer<Element>)), "Element 2 should be an ElementsContainer<Element>");
+#endif
             Assert.IsTrue(elements[3].GetType().Equals(typeof (Div)), "Element 3 should be a div");
 		}
 
 		[Test]
 		public void ElementCollectionSecondFilterShouldNeverThrowInvalidAttributeException()
 		{
-			var elements = ie.Elements.Filter(Find.ById("testlinkid"));
-			var elements2 = elements.Filter(Find.ByFor("Checkbox21"));
+			ElementCollection elements = ie.Elements.Filter(Find.ById("testlinkid"));
+			ElementCollection elements2 = elements.Filter(Find.ByFor("Checkbox21"));
 			Assert.AreEqual(0, elements2.Length);
 		}
 
@@ -356,7 +380,7 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void WaitUntilElementExistsTestElementAlreadyExists()
 		{
-			var button = ie.Button("disabledid");
+			Button button = ie.Button("disabledid");
 
 			Assert.IsTrue(button.Exists);
 			button.WaitUntilExists();
@@ -368,10 +392,10 @@ namespace WatiN.Core.UnitTests
 		{
 			Assert.IsTrue(Settings.WaitUntilExistsTimeOut > 3, "Settings.WaitUntilExistsTimeOut must be more than 3 seconds");
 
-			using (var ie1 = new IE(TestEventsURI))
+			using (IE ie1 = new IE(TestEventsURI))
 			{
-				var injectedTextField = ie1.TextField("injectedTextField");
-				var injectedDivTextField = ie1.Div("seconddiv").TextField("injectedTextField");
+				TextField injectedTextField = ie1.TextField("injectedTextField");
+				TextField injectedDivTextField = ie1.Div("seconddiv").TextField("injectedTextField");
 
 				Assert.IsFalse(injectedTextField.Exists);
 				Assert.IsFalse(injectedDivTextField.Exists);
@@ -383,7 +407,7 @@ namespace WatiN.Core.UnitTests
 
 				// WatiN should wait until the element exists before
 				// getting the text.
-				var text = injectedTextField.Text;
+				string text = injectedTextField.Text;
 
 				Assert.IsTrue(injectedTextField.Exists);
 				Assert.AreEqual("Injection Succeeded", text);
@@ -398,10 +422,10 @@ namespace WatiN.Core.UnitTests
 
 			Assert.IsTrue(Settings.WaitUntilExistsTimeOut > 3, "Settings.WaitUntilExistsTimeOut must be more than 3 seconds");
 
-			using (var ie1 = new IE(TestEventsURI))
+			using (IE ie1 = new IE(TestEventsURI))
 			{
-				var textfieldToRemove = ie1.TextField("textFieldToRemove");
-				var textfields = ie1.TextFields;
+				TextField textfieldToRemove = ie1.TextField("textFieldToRemove");
+				TextFieldCollection textfields = ie1.TextFields;
 
 				Assert.AreEqual("textFieldToRemove", textfields[indexTextFieldToRemove].Id);
 
@@ -420,7 +444,7 @@ namespace WatiN.Core.UnitTests
 			}
 		}
 
-		[Test, ExpectedException(typeof (Exceptions.TimeoutException), ExpectedMessage = "Timeout while waiting 1 seconds for element to show up.")]
+		[Test, ExpectedException(typeof (WatiN.Core.Exceptions.TimeoutException), ExpectedMessage = "Timeout while waiting 1 seconds for element to show up.")]
 		public void WaitUntilElementExistsTimeOutException()
 		{
 			ie.Button("nonexistingbutton").WaitUntilExists(1);
@@ -429,86 +453,97 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void WaitUntil()
 		{
-			var nativeElementMock = new Mock<INativeElement>();
-			var attributeBagMock = new Mock<IAttributeBag>();
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
+			MockRepository mockRepository = new MockRepository();
 
-			nativeElementMock.Expect(native => native.GetAttributeBag(domContainerMock.Object)).Returns(attributeBagMock.Object).AtMost(2);
-            nativeElementMock.Expect(native => native.IsElementReferenceStillValid()).Returns(true).AtMost(2);
-			
-            attributeBagMock.Expect(bag => bag.GetValue("disabled")).Returns(true.ToString()).AtMostOnce();
-			attributeBagMock.Expect(bag => bag.GetValue("disabled")).Returns(false.ToString()).AtMostOnce();
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			IAttributeBag attributeBag = (IAttributeBag) mockRepository.CreateMock(typeof (IAttributeBag));
+            DomContainer domContainer = (DomContainer) mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
 
-			var element = new Element(domContainerMock.Object, nativeElementMock.Object);
+			Expect.Call(nativeElement.GetAttributeBag(domContainer)).Return(attributeBag).Repeat.Times(2);
+			Expect.Call(nativeElement.IsElementReferenceStillValid()).Return(true).Repeat.Times(2);
+			Expect.Call(attributeBag.GetValue("disabled")).Return(true.ToString()).Repeat.Once();
+			Expect.Call(attributeBag.GetValue("disabled")).Return(false.ToString()).Repeat.Once();
+
+			mockRepository.ReplayAll();
+
+			Element element = new Element(domContainer, nativeElement);
 
 			// calls htmlelement.getAttribute twice (ones true and once false is returned)
 			element.WaitUntil(new AttributeConstraint("disabled", new BoolComparer(false)), 1);
 
-			nativeElementMock.VerifyAll();
-			attributeBagMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void WaitUntilShouldCallExistsToForceRefreshOfHtmlElement()
 		{
-			var nativeElementMock = new Mock<INativeElement>();
-			var attributeBagMock = new Mock<IAttributeBag>();
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
+			MockRepository mockRepository = new MockRepository();
 
-			nativeElementMock.Expect(native => native.GetAttributeBag(domContainerMock.Object)).Returns(attributeBagMock.Object);//.AtMostOnce();
-			attributeBagMock.Expect(bag => bag.GetValue("disabled")).Returns(false.ToString()); //.AtMostOnce();
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			IAttributeBag attributeBag = (IAttributeBag) mockRepository.CreateMock(typeof (IAttributeBag));
+            DomContainer domContainer = (DomContainer) mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
 
-			var elementMock = new Mock<Element>(domContainerMock.Object, nativeElementMock.Object);
+			Expect.Call(nativeElement.GetAttributeBag(domContainer)).Return(attributeBag).Repeat.Times(1);
+			Expect.Call(attributeBag.GetValue("disabled")).Return(false.ToString()).Repeat.Once();
 
-		    elementMock.Expect(elem => elem.Exists).Returns(true);
-		    var element = elementMock.Object;
+			element = (Element) mockRepository.DynamicMock(typeof (Element),domContainer, nativeElement);
+
+			Expect.Call(element.Exists).Return(true);
+
+			mockRepository.ReplayAll();
 
 			element.WaitUntil(new AttributeConstraint("disabled", new BoolComparer(false)), 1);
 
-            elementMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void WaitUntilExistsShouldIgnoreExceptionsDuringWait()
 		{
-			var nativeElementMock = new Mock<INativeElement>();
-			var elementFinderMock = new Mock<INativeElementFinder>();
-            var domContainerMock = new Mock<DomContainer>( new object[] { });
+			MockRepository mockRepository = new MockRepository();
 
-			element = new Element(domContainerMock.Object, elementFinderMock.Object);
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+			INativeElementFinder elementFinder = (INativeElementFinder) mockRepository.CreateMock(typeof (INativeElementFinder));
+            DomContainer domContainer = (DomContainer) mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
 
-			elementFinderMock.Expect(finder => finder.FindFirst()).Returns((INativeElement) null).AtMost(5);
-            elementFinderMock.Expect(finder => finder.FindFirst()).Throws(new UnauthorizedAccessException("")).AtMost(4);
-            elementFinderMock.Expect(finder => finder.FindFirst()).Returns(nativeElementMock.Object);
+			element = new Element(domContainer, elementFinder);
 
-			nativeElementMock.Expect(native => native.GetAttributeValue("innertext")).Returns("succeeded").AtMostOnce();
+			Expect.Call(elementFinder.FindFirst()).Return(null).Repeat.Times(5);
+			Expect.Call(elementFinder.FindFirst()).Throw(new UnauthorizedAccessException("")).Repeat.Times(4);
+			Expect.Call(elementFinder.FindFirst()).Return(nativeElement);
+
+			Expect.Call(nativeElement.GetAttributeValue("innertext")).Return("succeeded").Repeat.Once();
+
+			mockRepository.ReplayAll();
 
 			Assert.AreEqual("succeeded", element.Text);
 
-            nativeElementMock.VerifyAll();
-            elementFinderMock.VerifyAll();
-            domContainerMock.VerifyAll();
-        }
+			mockRepository.VerifyAll();
+		}
 
 		[Test]
 		public void WaitUntilExistsTimeOutExceptionInnerExceptionNotSetToLastExceptionThrown()
 		{
-			var elementCollectionMock = new Mock<IElementCollection>();
-            var domContainerMock = new Mock<DomContainer>( new object[] { });
-			var finderMock = new Mock<IEElementFinder> ( null, elementCollectionMock.Object, domContainerMock.Object);
+			MockRepository mockRepository = new MockRepository();
 
-			finderMock.Expect(finder => finder.FindFirst()).Throws(new UnauthorizedAccessException(""));
-            finderMock.Expect(finder => finder.FindFirst()).Returns((INativeElement) null); //.AtMostOnce();
+			IElementCollection elementCollection = (IElementCollection) mockRepository.CreateMock(typeof (IElementCollection));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
+			IEElementFinder finder = (IEElementFinder) mockRepository.CreateMock(typeof (IEElementFinder), null, elementCollection, domContainer);
 
-			var element = new Element(domContainerMock.Object, finderMock.Object);
+			Expect.Call(finder.FindFirst()).Throw(new UnauthorizedAccessException(""));
+			Expect.Call(finder.FindFirst()).Return(null).Repeat.AtLeastOnce();
 
-			Exceptions.TimeoutException timeoutException = null;
+			mockRepository.ReplayAll();
+
+			Element element = new Element(domContainer, finder);
+
+			WatiN.Core.Exceptions.TimeoutException timeoutException = null;
 
 			try
 			{
 				element.WaitUntilExists(1);
 			}
-			catch (Exceptions.TimeoutException e)
+			catch (WatiN.Core.Exceptions.TimeoutException e)
 			{
 				timeoutException = e;
 			}
@@ -516,30 +551,32 @@ namespace WatiN.Core.UnitTests
 			Assert.IsNotNull(timeoutException, "TimeoutException not thrown");
 			Assert.IsNull(timeoutException.InnerException, "Unexpected innerexception");
 
-            elementCollectionMock.VerifyAll();
-			domContainerMock.VerifyAll();
-            finderMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void WaitUntilExistsTimeOutExceptionInnerExceptionSetToLastExceptionThrown()
 		{
-			var elementCollectionMock = new Mock<IElementCollection>();
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
-            var finderMock = new Mock<IEElementFinder>(null, elementCollectionMock.Object, domContainerMock.Object);
+			MockRepository mockRepository = new MockRepository();
 
-			finderMock.Expect(finder => finder.FindFirst()).Throws(new Exception(""));
-            finderMock.Expect(finder => finder.FindFirst()).Throws(new UnauthorizedAccessException("mockUnauthorizedAccessException")).AtMostOnce();
+			IElementCollection elementCollection = (IElementCollection) mockRepository.CreateMock(typeof (IElementCollection));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
+            IEElementFinder finder = (IEElementFinder)mockRepository.DynamicMock(typeof(IEElementFinder), null, elementCollection, domContainer);
 
-			element = new Element(domContainerMock.Object, finderMock.Object);
+			Expect.Call(finder.FindFirst()).Throw(new Exception(""));
+			Expect.Call(finder.FindFirst()).Throw(new UnauthorizedAccessException("mockUnauthorizedAccessException")).Repeat.AtLeastOnce();
 
-			Exceptions.TimeoutException timeoutException = null;
+			mockRepository.ReplayAll();
+
+			element = new Element(domContainer, finder);
+
+			WatiN.Core.Exceptions.TimeoutException timeoutException = null;
 
 			try
 			{
 				element.WaitUntilExists(1);
 			}
-			catch (Exceptions.TimeoutException e)
+			catch (WatiN.Core.Exceptions.TimeoutException e)
 			{
 				timeoutException = e;
 			}
@@ -548,30 +585,32 @@ namespace WatiN.Core.UnitTests
 			Assert.IsInstanceOfType(typeof (UnauthorizedAccessException), timeoutException.InnerException, "Unexpected innerexception");
 			Assert.AreEqual("mockUnauthorizedAccessException", timeoutException.InnerException.Message);
 
-			elementCollectionMock.VerifyAll();
-            domContainerMock.VerifyAll();
-            finderMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 
 		[Test]
 		public void WaitUntilExistsShouldReturnImmediatelyIfElementIsSet()
 		{
-			var nativeElementMock = new Mock<INativeElement>();
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
-            var elementMock = new Mock<Element>(domContainerMock.Object, nativeElementMock.Object);
+			MockRepository mockRepository = new MockRepository();
 
-			elementMock.Expect(elem => elem.Exists).Never();
+			INativeElement nativeElement = (INativeElement) mockRepository.CreateMock(typeof (INativeElement));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
+            Element mockElement = (Element)mockRepository.DynamicMock(typeof(Element), domContainer, nativeElement);
 
-			elementMock.Object.WaitUntilExists(3);
+			Expect.Call(mockElement.Exists).Repeat.Never();
 
-            elementMock.VerifyAll();
+			mockRepository.ReplayAll();
+
+			mockElement.WaitUntilExists(3);
+
+			mockRepository.VerifyAll();
 		}
 
-		[Test, ExpectedException(typeof (Exceptions.TimeoutException), ExpectedMessage = "Timeout while waiting 1 seconds for element matching constraint: Attribute 'disabled' with value 'True'")]
+		[Test, ExpectedException(typeof (WatiN.Core.Exceptions.TimeoutException), ExpectedMessage = "Timeout while waiting 1 seconds for element matching constraint: Attribute 'disabled' with value 'True'")]
 		public void WaitUntilTimesOut()
 		{
 			element = ie.Form("Form");
-			Assert.That(element.GetAttributeValue("disabled"), Is.EqualTo(false.ToString()), "Expected enabled form");
+			Assert.That(element.GetAttributeValue("disabled"), Iz.EqualTo(false.ToString()), "Expected enabled form");
 
 			element.WaitUntil(new AttributeConstraint("disabled", true.ToString()), 1);
 		}
@@ -599,8 +638,8 @@ namespace WatiN.Core.UnitTests
 		{
 			ie.GoTo(TestEventsURI);
 
-			var report = ie.TextField("Report");
-			var button = ie.Button(Find.ByValue("Button without id"));
+			TextField report = ie.TextField("Report");
+			Core.Button button = ie.Button(Find.ByValue("Button without id"));
 
 			Assert.IsNull(button.Id, "Button id not null before click event");
 			Assert.IsNull(report.Text, "Report not empty");
@@ -626,7 +665,7 @@ namespace WatiN.Core.UnitTests
 			// test in HTMLDialog window
 			ie.Button("modalid").ClickNoWait();
 
-			using (var htmlDialog = ie.HtmlDialog(Find.ByIndex(0), 5))
+			using (HtmlDialog htmlDialog = ie.HtmlDialog(Find.ByIndex(0), 5))
 			{
 				htmlDialog.Button(Find.ByValue("Button without id")).KeyDown();
 
@@ -639,7 +678,7 @@ namespace WatiN.Core.UnitTests
 		{
 			ie.GoTo(GoogleUrl);
 
-			var button = ie.Button(Find.ByName("btnG"));
+			Button button = ie.Button(Find.ByName("btnG"));
 			PositionMousePointerInMiddleOfElement(button, ie);
 			button.Flash();
 			MouseMove(50, 50, true);
@@ -652,9 +691,9 @@ namespace WatiN.Core.UnitTests
 			Settings.MakeNewIeInstanceVisible = true;
 			Settings.HighLightElement = true;
 
-			using (var ie = new IE(FramesetURI))
+			using (IE ie = new IE(FramesetURI))
 			{
-				var button = ie.Frames[1].Links[0];
+				Link button = ie.Frames[1].Links[0];
 				PositionMousePointerInMiddleOfElement(button, ie);
 				button.Flash();
 				MouseMove(50, 50, true);
@@ -662,29 +701,29 @@ namespace WatiN.Core.UnitTests
 			}
 		}
 
-		private static void PositionMousePointerInMiddleOfElement(Element button, Document ie) 
+		private static void PositionMousePointerInMiddleOfElement(Element button, IE ie) 
 		{
-			var left = position(button, "Left");
-			var width = int.Parse(button.GetAttributeValue("clientWidth"));
-			var top = position(button, "Top");
-			var height = int.Parse(button.GetAttributeValue("clientHeight"));
+			int left = position(button, "Left");
+			int width = int.Parse(button.GetAttributeValue("clientWidth"));
+			int top = position(button, "Top");
+			int height = int.Parse(button.GetAttributeValue("clientHeight"));
 			
-			var window = (IHTMLWindow3) ((IHTMLDocument2)ie.NativeDocument.Object).parentWindow;
+			IHTMLWindow3 window = (IHTMLWindow3) ie.HtmlDocument.parentWindow;
 			
 			left = left + window.screenLeft;
 			top = top + window.screenTop;
 
-			var currentPt = new System.Drawing.Point(left + (width / 2), top + (height / 2));
+			System.Drawing.Point currentPt = new System.Drawing.Point(left + (width / 2), top + (height / 2));
 			System.Windows.Forms.Cursor.Position = currentPt;
 		}
 
 		private static int position(Element element, string attributename)
 		{
-			var pos = 0;
-            var offsetParent = ((IHTMLElement)element.NativeElement.Object).offsetParent;
+			int pos = 0;
+			IHTMLElement offsetParent = ((IHTMLElement)element.HTMLElement).offsetParent;
 			if (offsetParent != null)
 			{
-			    var domContainer = element.DomContainer;
+			    DomContainer domContainer = element.DomContainer;
 			    pos = position(new Element(domContainer, domContainer.NativeBrowser.CreateElement(offsetParent)), attributename);
 			}
 
@@ -697,7 +736,7 @@ namespace WatiN.Core.UnitTests
 
 		public void MouseMove(int X, int Y, bool Relative)
 		{
-			var currentPt = System.Windows.Forms.Cursor.Position;
+			System.Drawing.Point currentPt = System.Windows.Forms.Cursor.Position;
 			if (Relative)
 			{
 				currentPt.X += X;
@@ -725,7 +764,7 @@ namespace WatiN.Core.UnitTests
 			// test in HTMLDialog window
 			ie.Button("modalid").ClickNoWait();
 
-			using (var htmlDialog = ie.HtmlDialog(Find.ByIndex(0), 5))
+			using (HtmlDialog htmlDialog = ie.HtmlDialog(Find.ByIndex(0), 5))
 			{
 				htmlDialog.Button(Find.ByValue("Button without id")).KeyDown();
 
@@ -739,20 +778,20 @@ namespace WatiN.Core.UnitTests
 			Settings.HighLightElement = true;
 			Settings.HighLightColor = "red";
 
-			var textField = ie.TextField("name");
-			var _originalcolor = textField.Style.BackgroundColor;
+			TextField textField = ie.TextField("name");
+			string _originalcolor = textField.Style.BackgroundColor;
 
 			textField.Highlight(true);
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo("red"), "Unexpected background after Highlight(true)");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo("red"), "Unexpected background after Highlight(true)");
 
 			// Invoke highlighting done by WatiN when typing text
 			Settings.HighLightColor = "yellow";
 			textField.TypeText("abc");
 
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo("red"), "Unexpected background after TypeText");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo("red"), "Unexpected background after TypeText");
 		
 			textField.Highlight(false);
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
 		}
 
 		[Test]
@@ -761,17 +800,17 @@ namespace WatiN.Core.UnitTests
 			Settings.HighLightElement = true;
 			Settings.HighLightColor = "red";
 
-			var textField = ie.TextField("name");
-			var _originalcolor = textField.Style.BackgroundColor;
+			TextField textField = ie.TextField("name");
+			string _originalcolor = textField.Style.BackgroundColor;
 
 			textField.Highlight(true);
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo("red"), "Unexpected background after Highlight(true)");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo("red"), "Unexpected background after Highlight(true)");
 		
 			textField.Highlight(false);
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
 
 			textField.Highlight(false);
-			Assert.That(textField.Style.BackgroundColor, Is.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
+			Assert.That(textField.Style.BackgroundColor, Iz.EqualTo(_originalcolor), "Unexpected background Highlight(false)");
 		}
 
 		[Test]
@@ -779,34 +818,37 @@ namespace WatiN.Core.UnitTests
 		{
 			Settings.WaitUntilExistsTimeOut = 1;
 			
-			var elementFinderMock = new Mock<INativeElementFinder>();
-			elementFinderMock.Expect(finder => finder.FindFirst()).Throws(new Exception("My innerexception"));
-			
-			elementFinderMock.Expect(finder => finder.ElementTagsToString).Returns("button");
-            elementFinderMock.Expect(finder => finder.ConstraintToString).Returns("id=something");
+			mocks = new MockRepository();
 
+			INativeElementFinder elementFinder = (INativeElementFinder) mocks.CreateMock(typeof (INativeElementFinder));
+			elementFinder.FindFirst();
+			LastCall.Throw(new Exception("My innerexception")).Repeat.AtLeastOnce();
+			
+			SetupResult.For(elementFinder.ElementTagsToString).Return("button");
+			SetupResult.For(elementFinder.ConstriantToString).Return("id=something");
+
+		    IHTMLDocument2 ihtmlDocument = (IHTMLDocument2) mocks.CreateMock(typeof (IHTMLDocument2));
+		    SetupResult.For(ihtmlDocument.url).Return("http://mocked.com");
             
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
-		    var nativeDocumentMock = new Mock<INativeDocument>();
-            nativeDocumentMock.Expect(doc => doc.Url).Returns("http://mocked.com");
-            domContainerMock.Expect(container => container.NativeDocument).Returns(nativeDocumentMock.Object);
-			element = new Element(domContainerMock.Object, elementFinderMock.Object);
+            DomContainer domContainer = (DomContainer) mocks.DynamicMock(typeof(DomContainer), new object[] { });
+		    SetupResult.For(domContainer.HtmlDocument).Return(ihtmlDocument);
+			element = new Element(domContainer, elementFinder);
+
+			mocks.ReplayAll();
 
 			try
 			{
 				// kick off the elementFinder
-				var nativeElement = element.NativeElement;
+				INativeElement nativeElement = element.NativeElement;
 				Assert.Fail("ElementNotFoundException should be thrown");
 			}
 			catch(ElementNotFoundException e)
 			{
 				Assert.That(e.InnerException != null, "Expected an innerexception");
-				Assert.That(e.Message, Text.EndsWith("(inner exception: My innerexception)"));
+				Assert.That(e.Message, Texzt.EndsWith("(inner exception: My innerexception)"));
 			}
 
-            elementFinderMock.VerifyAll();
-            nativeDocumentMock.VerifyAll();
-            domContainerMock.VerifyAll();
+			mocks.VerifyAll();
 		}
 
 		[Test]
@@ -814,34 +856,37 @@ namespace WatiN.Core.UnitTests
 		{
 			Settings.WaitUntilExistsTimeOut = 1;
 			
-			var elementFinderMock = new Mock<INativeElementFinder>();
-			elementFinderMock.Expect(finder => finder.FindFirst()).Returns((INativeElement) null);
+			mocks = new MockRepository();
 
-            elementFinderMock.Expect(finder => finder.ElementTagsToString).Returns("button");
-            elementFinderMock.Expect(finder => finder.ConstraintToString).Returns("id=something");
+			INativeElementFinder elementFinder = (INativeElementFinder) mocks.CreateMock(typeof (INativeElementFinder));
+			elementFinder.FindFirst();
+			LastCall.Return(null).Repeat.AtLeastOnce();
+			
+			SetupResult.For(elementFinder.ElementTagsToString).Return("button");
+			SetupResult.For(elementFinder.ConstriantToString).Return("id=something");
 
-            var domContainerMock = new Mock<DomContainer>( new object[] { });
-			element = new Element(domContainerMock.Object, elementFinderMock.Object);
+            DomContainer domContainer = (DomContainer) mocks.DynamicMock(typeof(DomContainer), new object[] { });
+			element = new Element(domContainer, elementFinder);
 
-		    var nativeDocumentMock = new Mock<INativeDocument>();
-		    domContainerMock.Expect(container => container.NativeDocument).Returns(nativeDocumentMock.Object);
-            nativeDocumentMock.Expect(doc => doc.Url).Returns("http://mock.value.com");
+		    IHTMLDocument2 ihtmlDocument2 = (IHTMLDocument2) mocks.DynamicMock(typeof (IHTMLDocument2));
+		    SetupResult.For(domContainer.HtmlDocument).Return(ihtmlDocument2);
+		    SetupResult.For(ihtmlDocument2.url).Return("http://mock.value.com");
+
+			mocks.ReplayAll();
 
 			try
 			{
 				// kick off the elementFinder
-				var nativeElement = element.NativeElement;
+				INativeElement nativeElement = element.NativeElement;
 				Assert.Fail("ElementNotFoundException should be thrown");
 			}
 			catch(ElementNotFoundException e)
 			{
 				Assert.That(e.InnerException == null, "Expected an innerexception");
-				Assert.That(e.Message, Text.DoesNotEndWith("(inner exception: My innerexception)"));
+				Assert.That(e.Message, Texzt.DoesNotEndWith("(inner exception: My innerexception)"));
 			}
 
-            elementFinderMock.VerifyAll();
-            nativeDocumentMock.VerifyAll();
-            domContainerMock.VerifyAll();
+			mocks.VerifyAll();
 		}
 
         [Test]
@@ -852,67 +897,75 @@ namespace WatiN.Core.UnitTests
             ie.Button(Find.ById("modalid")).FireEventNoWait("onclick");
         }
 
+#if !NET11
         [Test]
         public void AncestorGenericType()
         {
-            var nativeElementMock = new Mock<INativeElement>();
-            var firstParentDivMock = new Mock<INativeElement>();
-            var secondParentDivMock = new Mock<INativeElement>();
-            var domContainerMock = new Mock<DomContainer>(new object[] { });
+            MockRepository mockRepository = new MockRepository();
 
-            element = new Element(domContainerMock.Object, nativeElementMock.Object);
-            nativeElementMock.Expect(native => native.Parent).Returns(firstParentDivMock.Object);
-            
-            firstParentDivMock.Expect(first => first.TagName).Returns("a");
-            firstParentDivMock.Expect(first => first.Parent).Returns(secondParentDivMock.Object);
+            INativeElement nativeElement = (INativeElement)mockRepository.CreateMock(typeof(INativeElement));
+            INativeElement firstParentDiv = (INativeElement)mockRepository.CreateMock(typeof(INativeElement));
+            INativeElement secondParentDiv = (INativeElement)mockRepository.CreateMock(typeof(INativeElement));
+            DomContainer domContainer = (DomContainer)mockRepository.DynamicMock(typeof(DomContainer), new object[] { });
 
-            secondParentDivMock.Expect(second => second.TagName).Returns("div");
+            element = new Element(domContainer, nativeElement);
+            Expect.Call(nativeElement.Parent).Return(firstParentDiv).Repeat.Any();
+            Expect.Call(firstParentDiv.TagName).Return("div").Repeat.Any();
 
-            Assert.That(element.Ancestor<Div>(), Is.Not.Null);
+            Expect.Call(firstParentDiv.Parent).Return(secondParentDiv).Repeat.Any();
+            Expect.Call(secondParentDiv.TagName).Return("div").Repeat.Any();
 
-        	nativeElementMock.VerifyAll();
-            firstParentDivMock.VerifyAll();
-            secondParentDivMock.VerifyAll();
-            domContainerMock.VerifyAll();
+            mockRepository.ReplayAll();
+
+            Assert.That(element.Ancestor<Div>(), NUnit.Framework.SyntaxHelpers.Is.Not.Null);
+
+        	mockRepository.VerifyAll();
         }
 
         [Test]
         public void AncestorGenericTypeAndAttributeConstraintShouldReturnTypedElement()
         {
             ie.GoTo(TablesUri);
-            var tableRow = ie.TableRow(Find.ById("2"));
+            TableRow tableRow = ie.TableRow(Find.ById("2"));
             Element ancestor = tableRow.Ancestor<Table>(Find.ById("Table1"));
           
             Assert.IsInstanceOfType (typeof (Table), ancestor);
-            Assert.That(ancestor.Id, Is.EqualTo("Table1"));
+            Assert.That(ancestor.Id, Iz.EqualTo("Table1"));
         }
 
+#if !NET11
         [Test]
         public void AncestorGenericTypeAndPredicateShouldReturnTypedElement()
         {
             ie.GoTo(TablesUri);
-            var tableRow = ie.TableRow(Find.ById("2"));
+            TableRow tableRow = ie.TableRow(Find.ById("2"));
             Element ancestor = tableRow.Ancestor<Table>(delegate(Table table) { return table.Id == "Table1"; });
           
             Assert.IsInstanceOfType (typeof (Table), ancestor);
-            Assert.That(ancestor.Id, Is.EqualTo("Table1"));
+            Assert.That(ancestor.Id, Iz.EqualTo("Table1"));
         }
 
         [Test]
         public void TableOfElementE()
         {
             Element table = ie.Table("table1");
-            table.WaitUntil((Table table1) => table1.Enabled);
+            table.WaitUntil<Table>(delegate(Table table1) { return table1.Enabled; });
+//            table.WaitUntil((Table table1) => table1.Enabled);
 
             ElementsContainer<Table> table2 = ie.Table("table1");
-            table2.WaitUntil(t => t.Enabled);
+            table2.WaitUntil(delegate(Table t) { return t.Enabled; });
+//            table2.WaitUntil(t => t.Enabled);
 
-            var table3 = ie.Table("table1");
+            Table table3 = ie.Table("table1");
             table3.WaitUntil(IsEnabled);
         }
+#endif
         private static bool IsEnabled(Table table)
         {
             return table.Enabled;
         }
+
+
+#endif
 	}
 }

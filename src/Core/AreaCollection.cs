@@ -17,7 +17,7 @@
 #endregion Copyright
 
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using WatiN.Core.Constraints;
 using WatiN.Core.Interfaces;
 
@@ -26,7 +26,11 @@ namespace WatiN.Core
 	/// <summary>
 	/// A typed collection of <see cref="Area" /> instances within a <see cref="Document" /> or <see cref="Element" />.
 	/// </summary>
+#if NET11
+	public class AreaCollection : BaseElementCollection
+#else
     public class AreaCollection : BaseElementCollection<Area>
+#endif
     {
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AreaCollection" /> class.
@@ -34,7 +38,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="elements">The elements.</param>
-		public AreaCollection(DomContainer domContainer, IEnumerable<INativeElement> elements) : base(domContainer, elements, Area.New) {}
+		public AreaCollection(DomContainer domContainer, ArrayList elements) : base(domContainer, elements, new CreateElementInstance(Area.New)) {}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AreaCollection" /> class.
@@ -42,7 +46,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="finder">The finder.</param>
-		public AreaCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, Area.New) {}
+		public AreaCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, new CreateElementInstance(Area.New)) {}
 
 		/// <summary>
 		/// Returns a new <see cref="AreaCollection" /> filtered by the <see cref="BaseConstraint" />.
@@ -54,8 +58,9 @@ namespace WatiN.Core
 			return new AreaCollection(domContainer, DoFilter(findBy));
 		}
 
+#if !NET11
 		/// <summary>
-		/// Returns a new <see cref="AreaCollection" /> filtered by the given <paramref name="predicate" />.
+		/// Returns a new <see cref="AreaCollection" /> filtered by the given <see cref="predicate" />.
 		/// </summary>
 		/// <param name="predicate">A predicate which filters the elements.</param>
 		/// <returns>The filtered collection.</returns>
@@ -63,6 +68,7 @@ namespace WatiN.Core
         {
             return new AreaCollection(domContainer, DoFilter(Find.ByElement(predicate)));
         }
+#endif
 
 		/// <summary>
 		/// Gets the <see cref="Area" /> at the specified index.
@@ -71,7 +77,7 @@ namespace WatiN.Core
 		/// <returns>The area.</returns>
 		public Area this[int index]
 		{
-			get { return ElementsTyped(index); }
+			get { return (Area)ElementsTyped(index); }
 		}
 	}
 }

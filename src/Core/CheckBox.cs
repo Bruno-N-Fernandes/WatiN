@@ -17,6 +17,7 @@
 #endregion Copyright
 
 using System.Collections;
+using mshtml;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
@@ -25,7 +26,11 @@ namespace WatiN.Core
 	/// This class provides specialized functionality for a HTML input element of type 
 	/// checkbox.
     /// </summary>
+#if NET11
+    public class CheckBox : RadioCheck
+#else
     public class CheckBox : RadioCheck<CheckBox>
+#endif
 	{
 		private static ArrayList elementTags;
 
@@ -35,7 +40,8 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList {new ElementTag("input", "checkbox")};
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("input", "checkbox"));
 				}
 
 				return elementTags;
@@ -48,7 +54,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The domContainer.</param>
 		/// <param name="inputElement">The input element.</param>
-		public CheckBox(DomContainer domContainer, INativeElement inputElement) : base(domContainer, inputElement) {}
+		public CheckBox(DomContainer domContainer, IHTMLInputElement inputElement) : base(domContainer, inputElement) {}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CheckBox"/> class.
@@ -64,9 +70,9 @@ namespace WatiN.Core
 		/// <param name="element">The element.</param>
 		public CheckBox(Element element) : base(element, ElementTags) {}
 
-		internal new static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
-			return new CheckBox(domContainer, element);
+			return new CheckBox(domContainer, (IHTMLInputElement) element);
 		}
 	}
 }

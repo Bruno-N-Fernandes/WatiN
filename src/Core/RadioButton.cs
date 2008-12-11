@@ -17,6 +17,7 @@
 #endregion Copyright
 
 using System.Collections;
+using mshtml;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
@@ -25,7 +26,11 @@ namespace WatiN.Core
 	/// This class provides specialized functionality for a HTML input element of type 
 	/// radio.
 	/// </summary>
+#if NET11
+	public class RadioButton : RadioCheck
+#else
     public class RadioButton : RadioCheck<RadioButton>
+#endif
 	{
 		private static ArrayList elementTags;
 
@@ -35,14 +40,15 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList {new ElementTag("input", "radio")};
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("input", "radio"));
 				}
 
 				return elementTags;
 			}
 		}
 
-		public RadioButton(DomContainer domContainer, INativeElement inputElement) : base(domContainer, inputElement) {}
+		public RadioButton(DomContainer domContainer, IHTMLInputElement inputElement) : base(domContainer, inputElement) {}
 
 		public RadioButton(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder) {}
 
@@ -52,9 +58,9 @@ namespace WatiN.Core
 		/// <param name="element">The element.</param>
 		public RadioButton(Element element) : base(element, ElementTags) {}
 
-		internal new static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
-			return new RadioButton(domContainer, element);
+			return new RadioButton(domContainer, (IHTMLInputElement) element);
 		}
 	}
 }

@@ -20,7 +20,6 @@ using System;
 using System.Collections;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
 
 namespace WatiN.Core.UnitTests
 {
@@ -38,8 +37,8 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void CreateFileUploadFromElement()
 		{
-			var element = ie.Element("upload");
-			var fileUpload = new FileUpload(element);
+			Element element = ie.Element("upload");
+			FileUpload fileUpload = new FileUpload(element);
 			Assert.AreEqual("upload", fileUpload.Id);
 		}
 
@@ -54,7 +53,7 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void FileUploadTest()
 		{
-			var fileUpload = ie.FileUpload("upload");
+			FileUpload fileUpload = ie.FileUpload("upload");
 
 			Assert.That(fileUpload.Exists);
 			Assert.IsNull(fileUpload.FileName);
@@ -67,7 +66,7 @@ namespace WatiN.Core.UnitTests
 		[Test, ExpectedException(typeof (System.IO.FileNotFoundException))]
 		public void FileUploadFileNotFoundException()
 		{
-			var fileUpload = ie.FileUpload("upload");
+			FileUpload fileUpload = ie.FileUpload("upload");
 			fileUpload.Set("nonexistingfile.nef");
 		}
 
@@ -78,20 +77,20 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(expectedFileUploadsCount, ie.FileUploads.Length, "Unexpected number of FileUploads");
 
 			// Collection.Length
-			var formFileUploads = ie.FileUploads;
+			FileUploadCollection formFileUploads = ie.FileUploads;
 
 			// Collection items by index
 			Assert.AreEqual("upload", ie.FileUploads[0].Id);
 
 			IEnumerable FileUploadEnumerable = formFileUploads;
-			var FileUploadEnumerator = FileUploadEnumerable.GetEnumerator();
+			IEnumerator FileUploadEnumerator = FileUploadEnumerable.GetEnumerator();
 
 			// Collection iteration and comparing the result with Enumerator
-			var count = 0;
+			int count = 0;
 			foreach (FileUpload inputFileUpload in formFileUploads)
 			{
 				FileUploadEnumerator.MoveNext();
-				var enumFileUpload = FileUploadEnumerator.Current;
+				object enumFileUpload = FileUploadEnumerator.Current;
 
 				Assert.IsInstanceOfType(inputFileUpload.GetType(), enumFileUpload, "Types are not the same");
 				Assert.AreEqual(inputFileUpload.OuterHtml, ((FileUpload) enumFileUpload).OuterHtml, "foreach and IEnumator don't act the same.");
@@ -103,23 +102,19 @@ namespace WatiN.Core.UnitTests
 		}
 
 		[Test]
-		public void FileUploadOfFileWithSpecialCharactersInFilenameShouldBeHandledOK()
+		public void FileUploadOfFileWithSendKeysEscapeCharactersInFilename()
 		{
-            // GIVEN
 			ie.Refresh();
 
-			var fileUpload = ie.FileUpload("upload");
+			FileUpload fileUpload = ie.FileUpload("upload");
 
-			Assert.That(fileUpload.Exists, "Pre-Condition: Expected file upload element");
-			Assert.That(fileUpload.FileName, Is.Null, "pre-Condition: Expected empty filename");
+			Assert.That(fileUpload.Exists);
+			Assert.IsNull(fileUpload.FileName);
 
-			var file = new Uri(HtmlTestBaseURI, @"~^+{}[].txt").LocalPath;
+			string file = new Uri(HtmlTestBaseURI, @"~^+{}[].txt").LocalPath;
+			fileUpload.Set(file);
 
-            // WHEN
-            fileUpload.Set(file);
-
-            // THEN
-			Assert.That(fileUpload.FileName, Is.EqualTo(file), "Unexpected filename");
+			Assert.AreEqual(file, fileUpload.FileName);
 		}
 
 		public override Uri TestPageUri

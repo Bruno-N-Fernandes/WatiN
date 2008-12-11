@@ -18,12 +18,12 @@
 
 using System;
 using System.Text.RegularExpressions;
-using Moq;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
+using Rhino.Mocks;
 using WatiN.Core.Comparers;
 using WatiN.Core.Constraints;
 using WatiN.Core.Interfaces;
+using Is = NUnit.Framework.SyntaxHelpers.Is;
 using StringComparer = WatiN.Core.Comparers.StringComparer;
 
 namespace WatiN.Core.UnitTests
@@ -32,6 +32,7 @@ namespace WatiN.Core.UnitTests
 	public class FindTests : BaseWithIETests
 	{
 		private const string _href = "href";
+#if !NET11
 	    private string _expectedPredicateCompareValue;
 
 	    [SetUp]
@@ -40,6 +41,7 @@ namespace WatiN.Core.UnitTests
             Settings.Reset();
 			_expectedPredicateCompareValue = null;
 		}
+#endif
 
 	    public override Uri TestPageUri
 	    {
@@ -52,7 +54,7 @@ namespace WatiN.Core.UnitTests
 		{
 			const string htmlfor = "htmlfor";
 
-			var value = Find.ByFor("foridvalue");
+			AttributeConstraint value = Find.ByFor("foridvalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "For class should inherit Attribute class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -60,25 +62,27 @@ namespace WatiN.Core.UnitTests
 			Assert.That(value.AttributeName, Is.EqualTo(htmlfor), "Wrong attributename");
 			Assert.AreEqual("foridvalue", value.Value, "Wrong value");
 
-			var regex = new Regex("^id");
+			Regex regex = new Regex("^id");
 			value = Find.ByFor(regex);
-			var attributeBag = new MockAttributeBag(htmlfor, "idvalue");
+			MockAttributeBag attributeBag = new MockAttributeBag(htmlfor, "idvalue");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex ^id should match");
 
 			value = Find.ByFor(new StringContainsAndCaseInsensitiveComparer("VAl"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             attributeBag = new MockAttributeBag(htmlfor, "forvalue");
 			_expectedPredicateCompareValue = "forvalue";
 			value = Find.ByFor(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
         }
 
 		[Test]
 		public void FindByID()
 		{
-			var value = Find.ById("idvalue");
+			AttributeConstraint value = Find.ById("idvalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Id class should inherit Attribute class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -87,37 +91,44 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(id, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("idvalue", value.Value, "Wrong value");
 
-			var attributeBag = new MockAttributeBag("id", "idvalue");
+			MockAttributeBag attributeBag = new MockAttributeBag("id", "idvalue");
 			value = Find.ById(new StringContainsAndCaseInsensitiveComparer("Val"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "idvalue";
 			value = Find.ById(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
 		public void IdWithRegexAndComparer()
 		{
-			var attributeBag = new MockAttributeBag("id", "idvalue");
+			MockRepository mocks = new MockRepository();
+			ICompare comparer = (ICompare) mocks.CreateMock(typeof (ICompare));
+			IAttributeBag attributeBag = (IAttributeBag) mocks.CreateMock(typeof (IAttributeBag));
+
+			Expect.Call(attributeBag.GetValue("id")).Return("idvalue");
+
+			Expect.Call(attributeBag.GetValue("id")).Return("MyMockComparer");
+			Expect.Call(comparer.Compare("MyMockComparer")).Return(true);
+
+			mocks.ReplayAll();
 
 			BaseConstraint value = Find.ById(new Regex("lue$"));
 			Assert.IsTrue(value.Compare(attributeBag), "Regex lue$ should match.");
 
 			// See if mocked comparer is used. VerifyAll will check this
-            var comparerMock = new Mock<ICompare>();
-            comparerMock.Expect(comparer => comparer.Compare("MyMockComparer")).Returns(true);
+			Find.ById(comparer).Compare(attributeBag);
 
-            attributeBag = new MockAttributeBag("id", "MyMockComparer");
-            Find.ById(comparerMock.Object).Compare(attributeBag);
-
-			comparerMock.VerifyAll();
+			mocks.VerifyAll();
 		}
 
 		[Test]
 		public void FindByAlt()
 		{
-			var value = Find.ByAlt("alt text");
+			AttributeConstraint value = Find.ByAlt("alt text");
 			
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Alt class should inherit Attribute class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -126,29 +137,34 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(name, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("alt text", value.Value, "Wrong value");
 
-			var regex = new Regex("ext$");
+			Regex regex = new Regex("ext$");
 			value = Find.ByAlt(regex);
-			var attributeBag = new MockAttributeBag(name, "alt text");
+			MockAttributeBag attributeBag = new MockAttributeBag(name, "alt text");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex ext$ should match");
 
 			value = Find.ByAlt(new StringContainsAndCaseInsensitiveComparer("ALT TexT"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "alt text";
 			value = Find.ByAlt(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
         }
 
+#if !NET11
         private bool TestPredicateCompareMethod(string value)
 		{
 			return value == _expectedPredicateCompareValue;
 		}
+#endif
+
 
 		[Test]
 		public void FindByName()
 		{
-			var value = Find.ByName("namevalue");
+			AttributeConstraint value = Find.ByName("namevalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Name class should inherit Attribute class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -157,24 +173,26 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(name, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("namevalue", value.Value, "Wrong value");
 
-			var regex = new Regex("lue$");
+			Regex regex = new Regex("lue$");
 			value = Find.ByName(regex);
-			var attributeBag = new MockAttributeBag(name, "namevalue");
+			MockAttributeBag attributeBag = new MockAttributeBag(name, "namevalue");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex lue$ should match");
 
 			value = Find.ByName(new StringContainsAndCaseInsensitiveComparer("eVAl"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "namevalue";
 			value = Find.ByName(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
 		public void FindByText()
 		{
-			var value = Find.ByText("textvalue");
+			AttributeConstraint value = Find.ByText("textvalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Text class should inherit Attribute class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -183,25 +201,27 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(innertext, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("textvalue", value.Value, "Wrong value");
 
-			var regex = new Regex("lue$");
+			Regex regex = new Regex("lue$");
 			value = Find.ByText(regex);
-			var attributeBag = new MockAttributeBag(innertext, "textvalue");
+			MockAttributeBag attributeBag = new MockAttributeBag(innertext, "textvalue");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex lue$ should match");
 
 			value = Find.ByText(new StringContainsAndCaseInsensitiveComparer("tVal"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "textvalue";
 			value = Find.ByText(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
 		public void FindByStyle()
 		{
 			const string attributeName = "background-color";
-			var value = Find.ByStyle(attributeName, "red");
+			AttributeConstraint value = Find.ByStyle(attributeName, "red");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "StyleAttributeConstraint class should inherit AttributeConstraint class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -210,25 +230,27 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(fullAttributeName, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("red", value.Value, "Wrong value");
 
-			var regex = new Regex("een$");
+			Regex regex = new Regex("een$");
 			value = Find.ByStyle(attributeName, regex);
-			var attributeBag = new MockAttributeBag(fullAttributeName, "green");
+			MockAttributeBag attributeBag = new MockAttributeBag(fullAttributeName, "green");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex een$ should match");
 
 			value = Find.ByStyle(attributeName, new StringContainsAndCaseInsensitiveComparer("rEe"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "green";
 			value = Find.ByStyle(attributeName, TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
 		public void FindByUrl()
 		{
-            var url = WatiNURI.AbsoluteUri;
-			var value = Find.ByUrl(url);
+            string url = BaseWithIETests.WatiNURI.AbsoluteUri;
+			AttributeConstraint value = Find.ByUrl(url);
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Url class should inherit AttributeConstraint class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(UriComparer)), "Unexpected comparer");
@@ -240,13 +262,15 @@ namespace WatiN.Core.UnitTests
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Url class should inherit AttributeConstraint class");
 			AssertUrlValue(value);
 
-			var attributeBag = new MockAttributeBag("href", url);
+			MockAttributeBag attributeBag = new MockAttributeBag("href", url);
 			value = Find.ByUrl(new StringContainsAndCaseInsensitiveComparer("/watin.Sour"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = url;
 			value = Find.ByUrl(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test, ExpectedException(typeof (UriFormatException))]
@@ -258,20 +282,20 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void FindByUri()
 		{
-			var value = Find.ByUrl(WatiNURI);
+			AttributeConstraint value = Find.ByUrl(BaseWithIETests.WatiNURI);
 			AssertUrlValue(value);
 
 			// make sure the ignore querystring constructer also works.
-			value = Find.ByUrl(WatiNURI, true);
+			value = Find.ByUrl(BaseWithIETests.WatiNURI, true);
 			AssertUrlValue(value);
 		}
 
 		private static void AssertUrlValue(AttributeConstraint value)
 		{
 			Assert.AreEqual(_href, value.AttributeName, "Wrong attributename");
-			Assert.AreEqual(WatiNURI.AbsoluteUri, value.Value, "Wrong value");
+			Assert.AreEqual(BaseWithIETests.WatiNURI.AbsoluteUri, value.Value, "Wrong value");
 
-            var attributeBag = new MockAttributeBag(_href, WatiNURI.AbsoluteUri);
+            MockAttributeBag attributeBag = new MockAttributeBag(_href, BaseWithIETests.WatiNURI.AbsoluteUri);
 
 			Assert.IsTrue(value.Compare(attributeBag), "Should match WatiN url");
 
@@ -288,9 +312,9 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void FindByUrlWithRegex()
 		{
-			var regex = new Regex("^http://watin");
-			var value = Find.ByUrl(regex);
-			var attributeBag = new MockAttributeBag(_href, "http://watin.sourceforge.net");
+			Regex regex = new Regex("^http://watin");
+			BaseConstraint value = Find.ByUrl(regex);
+			MockAttributeBag attributeBag = new MockAttributeBag(_href, "http://watin.sourceforge.net");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex ^http://watin should match");
 		}
@@ -304,8 +328,8 @@ namespace WatiN.Core.UnitTests
 		[Test, ExpectedException(typeof (UriFormatException))]
 		public void FindByUrlInvalidCompare()
 		{
-            BaseConstraint value = Find.ByUrl(WatiNURI.AbsoluteUri);
-			var attributeBag = new MockAttributeBag(_href, "watin.sourceforge.net");
+            BaseConstraint value = Find.ByUrl(BaseWithIETests.WatiNURI.AbsoluteUri);
+			MockAttributeBag attributeBag = new MockAttributeBag(_href, "watin.sourceforge.net");
 
 			value.Compare(attributeBag);
 		}
@@ -315,7 +339,7 @@ namespace WatiN.Core.UnitTests
 		{
 			const string title = "title";
 
-			var value = Find.ByTitle("titlevalue");
+			AttributeConstraint value = Find.ByTitle("titlevalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Title class should inherit AttributeConstraint class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringContainsAndCaseInsensitiveComparer)), "Unexpected comparer");
@@ -324,7 +348,7 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual("titlevalue", value.Value, "Wrong value");
 
 
-			var attributeBag = new MockAttributeBag(title, String.Empty);
+			MockAttributeBag attributeBag = new MockAttributeBag(title, String.Empty);
 			Assert.IsFalse(value.Compare(attributeBag), "Empty should not match");
 
 			attributeBag = new MockAttributeBag(title, null);
@@ -346,7 +370,7 @@ namespace WatiN.Core.UnitTests
 			value = Find.ByTitle("alue");
 			Assert.IsTrue(value.Compare(attributeBag), "Compare should partial match alue");
 
-			var regex = new Regex("^titl");
+			Regex regex = new Regex("^titl");
 			value = Find.ByTitle(regex);
 			Assert.IsTrue(value.Compare(attributeBag), "Regex ^titl should match");
 
@@ -359,9 +383,11 @@ namespace WatiN.Core.UnitTests
 			value = Find.ByTitle(new StringContainsAndCaseInsensitiveComparer("iTl"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "title";
 			value = Find.ByTitle(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
@@ -369,7 +395,7 @@ namespace WatiN.Core.UnitTests
 		{
 			const string valueAttrib = "value";
 
-			var value = Find.ByValue("valuevalue");
+			AttributeConstraint value = Find.ByValue("valuevalue");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Value class should inherit AttributeConstraint class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -378,18 +404,20 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual("valuevalue", value.Value, "Wrong value");
 			Assert.AreEqual("valuevalue", value.ToString(), "Wrong ToString result");
 
-			var regex = new Regex("lue$");
+			Regex regex = new Regex("lue$");
 			value = Find.ByValue(regex);
-			var attributeBag = new MockAttributeBag(valueAttrib, "valuevalue");
+			MockAttributeBag attributeBag = new MockAttributeBag(valueAttrib, "valuevalue");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex lue$ should match");
 
 			value = Find.ByValue(new StringContainsAndCaseInsensitiveComparer("eVal"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "valuevalue";
 			value = Find.ByValue(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
@@ -397,7 +425,7 @@ namespace WatiN.Core.UnitTests
 		{
 			const string src = "src";
 
-			var value = Find.BySrc("image.gif");
+			AttributeConstraint value = Find.BySrc("image.gif");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Src class should inherit AttributeConstraint class");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -405,13 +433,13 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(src, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("image.gif", value.Value, "Wrong value");
 
-			var attributeBag = new MockAttributeBag(src, "/images/image.gif");
+			MockAttributeBag attributeBag = new MockAttributeBag(src, "/images/image.gif");
 			Assert.IsFalse(value.Compare(attributeBag), "Should not match /images/image.gif");
 
 			attributeBag = new MockAttributeBag(src, "image.gif");
 			Assert.IsTrue(value.Compare(attributeBag), "Should match image.gif");
 
-			var regex = new Regex("image.gif$");
+			Regex regex = new Regex("image.gif$");
 			value = Find.BySrc(regex);
 			attributeBag = new MockAttributeBag(src, "/images/image.gif");
 
@@ -420,28 +448,34 @@ namespace WatiN.Core.UnitTests
 			value = Find.BySrc(new StringContainsAndCaseInsensitiveComparer("es/Im"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "/images/image.gif";
 			value = Find.BySrc(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 		
 		[Test]
 		public void FindByElement()
 		{
-			var comparer = new ElementComparerMock();
-			var constraint = Find.ByElement(comparer);
+			ElementComparerMock comparer = new ElementComparerMock();
+			ElementConstraint constraint = Find.ByElement(comparer);
 			
 			Assert.That(constraint.Comparer, Is.InstanceOfType(typeof(ElementComparerMock)));
 
+#if !NET11
             constraint = Find.ByElement(CallThisPredicate);
 
 			Assert.That(constraint.Comparer, Is.InstanceOfType(typeof(PredicateElementComparer<Element>)));
+#endif
         }
 
-        private static bool CallThisPredicate(Element element)
+#if !NET11
+        private bool CallThisPredicate(Element element)
 		{
 			return true;
 		}
+#endif
 
 		[Test, ExpectedException(typeof (ArgumentNullException))]
 		public void NewAttributeWithNullAttribute()
@@ -482,7 +516,7 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void NewAttributeWithEmptyValue()
 		{
-			var attribute = new AttributeConstraint("id", string.Empty);
+			AttributeConstraint attribute = new AttributeConstraint("id", string.Empty);
 			Assert.IsEmpty(attribute.Value);
 		}
 
@@ -496,13 +530,13 @@ namespace WatiN.Core.UnitTests
 		public void FindBy()
 		{
 			const string id = "id";
-			var value = Find.By(id, "idvalue");
+			AttributeConstraint value = Find.By(id, "idvalue");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
 
 			Assert.AreEqual(id, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("idvalue", value.Value, "Wrong value");
 
-			var attributeBag = new MockAttributeBag(id, "idvalue");
+			MockAttributeBag attributeBag = new MockAttributeBag(id, "idvalue");
 			Assert.IsTrue(value.Compare(attributeBag), "Compare should match");
 
 			attributeBag = new MockAttributeBag(id, "id");
@@ -514,7 +548,7 @@ namespace WatiN.Core.UnitTests
 			attributeBag = new MockAttributeBag(id, "value");
 			Assert.IsFalse(value.Compare(attributeBag), "Compare should not partial match value");
 
-			var regex = new Regex("lue$");
+			Regex regex = new Regex("lue$");
 			value = Find.By(id, regex);
 			attributeBag = new MockAttributeBag(id, "idvalue");
 
@@ -523,15 +557,17 @@ namespace WatiN.Core.UnitTests
 			value = Find.By(id, new StringContainsAndCaseInsensitiveComparer("dVal"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "idvalue";
 			value = Find.By(id, TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
 		[Test]
 		public void FindByClass()
 		{
-			var value = Find.ByClass("highlighted");
+			AttributeConstraint value = Find.ByClass("highlighted");
 
 			Assert.IsInstanceOfType(typeof (BaseConstraint), value, "Find.ByClass should return an AttributeConstraint");
 			Assert.That(value.Comparer,  Is.TypeOf(typeof(StringComparer)), "Unexpected comparer");
@@ -540,18 +576,20 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual(classname, value.AttributeName, "Wrong attributename");
 			Assert.AreEqual("highlighted", value.Value, "Wrong value");
 
-			var regex = new Regex("ghted$");
+			Regex regex = new Regex("ghted$");
 			value = Find.ByClass(regex);
-			var attributeBag = new MockAttributeBag(classname, "highlighted");
+			MockAttributeBag attributeBag = new MockAttributeBag(classname, "highlighted");
 
 			Assert.IsTrue(value.Compare(attributeBag), "Regex ghted$ should match");
 
 			value = Find.ByClass(new StringContainsAndCaseInsensitiveComparer("hLIg"));
 			Assert.That(value.Compare(attributeBag), Is.True, "Comparer not used");
 
+#if !NET11
             _expectedPredicateCompareValue = "highlighted";
 			value = Find.ByClass(TestPredicateCompareMethod);
 			Assert.That(value.Compare(attributeBag), Is.True, "PredicateComparer not used");
+#endif
 		}
 
         [Test]
@@ -566,14 +604,14 @@ namespace WatiN.Core.UnitTests
 		{
 			// Because ProximityTextConstraint requires a ElementAttribute bag with a fairly complete DOM
 			// we can't use the MockAttributeBag to test this.
-		    var inputUsername = ie.TextField(Find.Near("User Name"));
+		    TextField inputUsername = ie.TextField(Find.Near("User Name"));
 		    Assert.AreEqual("inputUserName", inputUsername.Id, "Left/right proximity for text did not find 'User Name' field.");
 
-		    var inputPassword = ie.TextField(Find.Near("Password"));
+		    TextField inputPassword = ie.TextField(Find.Near("Password"));
 		    Assert.AreEqual("inputPassword", inputPassword.Id, "Left/right proximity for text did not find 'Password' field.");
 		
 		    // Test with a constraint
-		    var inputUsername2 = ie.TextField(new ProximityTextConstraint("User Name"));
+		    TextField inputUsername2 = ie.TextField(new ProximityTextConstraint("User Name"));
 		    Assert.AreEqual(inputUsername.Id, inputUsername2.Id, "Find.Near and ProximityTextConstraint did not find same element.");
 		}
 		
@@ -586,14 +624,14 @@ namespace WatiN.Core.UnitTests
 			
 			// The control to test against
 			Assert.IsTrue(ie.CheckBox("Checkbox21").Exists, "Checkbox21 missing.");
-			var checkBox21a = ie.CheckBox("Checkbox21");
+			CheckBox checkBox21a = ie.CheckBox("Checkbox21");
 			
 			// Test with Find.ByLabelText
-			var checkBox21b = ie.CheckBox(Find.ByLabelText("label for Checkbox21"));
+			CheckBox checkBox21b = ie.CheckBox(Find.ByLabelText("label for Checkbox21"));
 			Assert.AreEqual(checkBox21a.Id, checkBox21b.Id, "Checkbox attached to Label for Checkbox21 did not match CheckBox21.");
 			
 			// Test with a constraint
-			var checkBox21c = ie.CheckBox(new LabelTextConstraint("label for Checkbox21"));
+			CheckBox checkBox21c = ie.CheckBox(new LabelTextConstraint("label for Checkbox21"));
 			Assert.AreEqual(checkBox21b.Id, checkBox21c.Id, "Using a LabelTextContraint did not return the same as Find.ByLabelText for Checkbox21.");
 		}
 		
@@ -604,7 +642,7 @@ namespace WatiN.Core.UnitTests
             Settings.FindByDefaultFactory = new MyTestDefaultFindFactory();
 
             // WHEN
-            var byDefault = (AttributeConstraint) Find.ByDefault("testValue");
+            Constraints.AttributeConstraint byDefault = (Constraints.AttributeConstraint) Find.ByDefault("testValue");
 
             // THEN
             Assert.That(byDefault.AttributeName, Is.EqualTo(MyTestDefaultFindFactory.TEST_ATTRIBUTE));
@@ -617,7 +655,7 @@ namespace WatiN.Core.UnitTests
             Settings.FindByDefaultFactory = new MyTestDefaultFindFactory();
 
             // WHEN
-            var byDefault = (AttributeConstraint) Find.ByDefault(new Regex("testValue"));
+            Constraints.AttributeConstraint byDefault = (Constraints.AttributeConstraint) Find.ByDefault(new Regex("testValue"));
 
             // THEN
             Assert.That(byDefault.AttributeName, Is.EqualTo(MyTestDefaultFindFactory.TEST_ATTRIBUTE));
@@ -640,7 +678,7 @@ namespace WatiN.Core.UnitTests
 
 	    public class ElementComparerMock : ICompareElement
 		{
-			public bool IsCalled;
+			public bool IsCalled = false;
 			
 			public bool Compare(Element element)
 			{

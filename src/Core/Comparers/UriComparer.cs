@@ -25,8 +25,8 @@ namespace WatiN.Core.Comparers
 	/// </summary>
 	public class UriComparer : BaseComparer
 	{
-		private readonly Uri uriToCompareWith;
-		private readonly bool _ignoreQuery;
+		private Uri uriToCompareWith;
+		private bool _ignoreQuery = false;
 
 		/// <summary>
 		/// Constructor, querystring will not be ignored in comparisons.
@@ -57,11 +57,13 @@ namespace WatiN.Core.Comparers
         /// Should return <c>true</c> or <c>false</c>, which is the default.
         /// </returns>
 		public override bool Compare(string value)
-        {
-            return !UtilityClass.IsNullOrEmpty(value) && Compare(UtilityClass.CreateUri(value));
-        }
+		{
+			if (UtilityClass.IsNullOrEmpty(value)) return false;
 
-	    /// <summary>
+			return Compare(new Uri(value));
+		}
+
+		/// <summary>
 		/// Compares the specified Uri.
 		/// </summary>
 		/// <param name="url">The Uri.</param>
@@ -75,8 +77,8 @@ namespace WatiN.Core.Comparers
 			}
 		
             // trim querystrings
-		    var trimmedUrl = TrimQueryString(url);
-		    var trimmedUrlToCompareWith = TrimQueryString(uriToCompareWith);
+		    string trimmedUrl = TrimQueryString(url);
+		    string trimmedUrlToCompareWith = TrimQueryString(uriToCompareWith);
 		    
             // compare trimmed urls.
 		    return (string.Compare(trimmedUrl, trimmedUrlToCompareWith, true) == 0);

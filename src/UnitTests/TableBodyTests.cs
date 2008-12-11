@@ -52,6 +52,7 @@ namespace WatiN.Core.UnitTests
 			Assert.AreEqual("3", tableBody.TableRows[1].Id, "Unexpected tablerows[1].id");
 		}
 
+#if !NET11
         [Test]
         public void FindTableRowUsingPredicateT()
         {
@@ -60,5 +61,7 @@ namespace WatiN.Core.UnitTests
 
             Assert.That(tableRow.Exists);
         }
+#endif
+
 	}
 }

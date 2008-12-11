@@ -117,6 +117,15 @@ namespace WatiN.Core.Constraints
 			return EvaluateAndOrAttributes(attributeBag, comparer.Compare(attributeBag.GetValue(attributeName)));
 		}
 
+        /// <summary>
+        /// Use DoCompare instead.
+        /// </summary>
+		[Obsolete("Use DoCompare instead.")]
+		protected bool doCompare(IAttributeBag attributeBag)
+		{
+			return DoCompare(attributeBag);
+		}
+
 		/// <summary>
 		/// Returns a <see cref="T:System.String"/> that represents the current <see cref="T:System.Object"/>.
 		/// </summary>

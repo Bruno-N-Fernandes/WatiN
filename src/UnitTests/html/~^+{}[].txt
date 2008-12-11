@@ -1,1 +1,1 @@
-Used by FileUploadTest.FileUploadOfFileWithSpecialCharactersInFilenameShouldBeHandledOK
+Used by FileUploadTest.FileUploadOfFileWithSendKeysEscapeCharactersInFilename

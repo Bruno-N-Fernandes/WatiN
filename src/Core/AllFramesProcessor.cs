@@ -27,10 +27,10 @@ namespace WatiN.Core
 	{
 		public ArrayList elements;
 
-		private readonly HTMLDocument htmlDocument;
-		private readonly IHTMLElementCollection frameElements;
-		private int index;
-		private readonly DomContainer _domContainer;
+		private HTMLDocument htmlDocument;
+		private IHTMLElementCollection frameElements;
+		private int index = 0;
+		private DomContainer _domContainer;
 
 		public AllFramesProcessor(DomContainer domContainer, HTMLDocument htmlDocument)
 		{
@@ -45,7 +45,7 @@ namespace WatiN.Core
 				frameElements = (IHTMLElementCollection) htmlDocument.all.tags("IFRAME");
 			}
 
-			_domContainer = domContainer;
+			this._domContainer = domContainer;
 			this.htmlDocument = htmlDocument;
 		}
 
@@ -57,10 +57,10 @@ namespace WatiN.Core
 		public void Process(IWebBrowser2 webBrowser2)
 		{
 			// Get the frame element from the parent document
-			var frameElement = (IHTMLElement) frameElements.item(index, null);
-			var frameElementUniqueId = ((DispHTMLBaseElement) frameElement).uniqueID;
+			IHTMLElement frameElement = (IHTMLElement) frameElements.item(index, null);
+			string frameElementUniqueId = ((DispHTMLBaseElement) frameElement).uniqueID;
 
-			var frame = new Frame(_domContainer, (IHTMLDocument2)webBrowser2.Document, (IHTMLDocument3) htmlDocument, frameElementUniqueId);
+			Frame frame = new Frame(_domContainer, (IHTMLDocument2)webBrowser2.Document, (IHTMLDocument3) htmlDocument, frameElementUniqueId);
 			
 			elements.Add(frame);
 

@@ -36,7 +36,6 @@ namespace WatiN.Core
 
 		internal const int WM_SYSCOMMAND = 0x0112;
 		internal const int WM_CLOSE = 0x0010;
-	    internal const UInt32 WM_CHAR = 0x0102;
 		internal const int SC_CLOSE = 0xF060;
 
 		internal const int KEYEVENTF_EXTENDEDKEY = 0x1;
@@ -109,7 +108,7 @@ namespace WatiN.Core
 		/// Enumeration of the different ways of showing a window using 
 		/// ShowWindow
 		/// </summary>
-		public enum WindowShowStyle
+		public enum WindowShowStyle : int
 		{
 			/// <summary>Hides the window and activates another window.</summary>
 			/// <remarks>See SW_HIDE</remarks>
@@ -168,7 +167,7 @@ namespace WatiN.Core
 			ForceMinimized = 11
 		}
 
-		[Flags]
+		[Flags()]
 		internal enum tagOLECONTF
 		{
 			OLECONTF_EMBEDDINGS = 1,
@@ -238,16 +237,9 @@ namespace WatiN.Core
 		[DllImport("user32.dll", CharSet=CharSet.Auto)]
 		internal static extern int SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        internal static extern IntPtr SendMessage(HandleRef hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
 		[DllImport("user32.dll", SetLastError=true)]
 		[return : MarshalAs(UnmanagedType.Bool)]
 		internal static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        internal static extern IntPtr SetFocus(IntPtr hWnd);
-
 
 		[DllImport("user32", CharSet = CharSet.Ansi, SetLastError = true, ExactSpelling = true)]
 		internal static extern Int32 EnumChildWindows(IntPtr hWndParent, EnumChildProc lpEnumFunc, ref IntPtr lParam);
@@ -368,66 +360,68 @@ namespace WatiN.Core
 
 		internal static void EnumIWebBrowser2Interfaces(IWebBrowser2Processor processor)
 		{
-			var oc = processor.HTMLDocument() as IOleContainer;
+			IOleContainer oc = processor.HTMLDocument() as IOleContainer;
 
-		    if (oc == null) return;
-	        
-            IEnumUnknown eu;
-            var hr = oc.EnumObjects(tagOLECONTF.OLECONTF_EMBEDDINGS, out eu);
-	        Marshal.ThrowExceptionForHR(hr);
+			if (oc != null)
+			{
+				IEnumUnknown eu;
+				int hr = oc.EnumObjects(tagOLECONTF.OLECONTF_EMBEDDINGS, out eu);
+				Marshal.ThrowExceptionForHR(hr);
 
-		    if (eu == null) return;
-	        
-            try
-	        {
-	            object pUnk;
-	            int fetched;
-	            const int MAX_FETCH_COUNT = 1;
+				if (eu != null)
+				{
+					try
+					{
+						object pUnk;
+						int fetched;
+						const int MAX_FETCH_COUNT = 1;
 
-	            // get the first embedded object
-	            // pUnk alloc
-	            hr = eu.Next(MAX_FETCH_COUNT, out pUnk, out fetched);
-	            Marshal.ThrowExceptionForHR(hr);
+						// get the first embedded object
+						// pUnk alloc
+						hr = eu.Next(MAX_FETCH_COUNT, out pUnk, out fetched);
+						Marshal.ThrowExceptionForHR(hr);
 
-	            while (hr == 0)
-	            {
-	                // Query Interface pUnk for the IWebBrowser2 interface
-	                var brow = pUnk as IWebBrowser2;
+						while (hr == 0)
+						{
+							// Query Interface pUnk for the IWebBrowser2 interface
+							IWebBrowser2 brow = pUnk as IWebBrowser2;
 
-	                try
-	                {
-	                    if (brow != null)
-	                    {
-	                        processor.Process(brow);
-	                        if (!processor.Continue())
-	                        {
-	                            break;
-	                        }
-	                        // free brow
-	                        ReleaseComObjectButIgnoreNull(brow);
-	                    }
-	                }
-	                catch
-	                {
-	                    // free brow
-	                    ReleaseComObjectButIgnoreNull(brow);
-	                    ReleaseComObjectButIgnoreNull(pUnk);
-	                }
+							try
+							{
+								if (brow != null)
+								{
+									processor.Process(brow);
+									if (!processor.Continue())
+									{
+										break;
+									}
+									// free brow
+									ReleaseComObjectButIgnoreNull(brow);
+								}
+							}
+							catch
+							{
+								// free brow
+								ReleaseComObjectButIgnoreNull(brow);
+								ReleaseComObjectButIgnoreNull(pUnk);
+							}
 
-	                // pUnk free
-	                ReleaseComObjectButIgnoreNull(pUnk);
+							// pUnk free
+							ReleaseComObjectButIgnoreNull(pUnk);
 
-	                // get the next embedded object
-	                // pUnk alloc
-	                hr = eu.Next(MAX_FETCH_COUNT, out pUnk, out fetched);
-	                Marshal.ThrowExceptionForHR(hr);
-	            }
-	        }
-	        finally
-	        {
-	            // eu free
-	            ReleaseComObjectButIgnoreNull(eu);
-	        }
+							// get the next embedded object
+							// pUnk alloc
+							hr = eu.Next(MAX_FETCH_COUNT, out pUnk, out fetched);
+							Marshal.ThrowExceptionForHR(hr);
+						}
+					}
+					finally
+					{
+						// eu free
+						ReleaseComObjectButIgnoreNull(eu);
+					}
+				}
+			}
 		}
 
 		public static void ReleaseComObjectButIgnoreNull(object comObject)
@@ -447,8 +441,8 @@ namespace WatiN.Core
 		/// <returns>Text of the window</returns>
 		internal static string GetWindowText(IntPtr hwnd)
 		{
-			var length = GetWindowTextLength(hwnd) + 1;
-			var buffer = new StringBuilder(length);
+			int length = GetWindowTextLength(hwnd) + 1;
+			StringBuilder buffer = new StringBuilder(length);
 			GetWindowText(hwnd, buffer, length);
 
 			return buffer.ToString();
@@ -465,15 +459,20 @@ namespace WatiN.Core
 		{
 			const int maxCapacity = 255;
 
-			var className = new StringBuilder(maxCapacity);
-			var lRes = GetClassName(hwnd, className, maxCapacity);
-			
-            return lRes == 0 ? String.Empty : className.ToString();
+			StringBuilder className = new StringBuilder(maxCapacity);
+
+			Int32 lRes = GetClassName(hwnd, className, maxCapacity);
+			if (lRes == 0)
+			{
+				return String.Empty;
+			}
+
+			return className.ToString();
 		}
 
 		internal static Int64 GetWindowStyle(IntPtr hwnd)
 		{
-			var info = new WINDOWINFO();
+			WINDOWINFO info = new WINDOWINFO();
 			info.cbSize = (uint) Marshal.SizeOf(info);
 			GetWindowInfo(hwnd, ref info);
 
@@ -482,19 +481,20 @@ namespace WatiN.Core
 
 		internal static void ClickDialogButton(int buttonid, IntPtr parentHwnd)
 		{
-			var buttonPtr = GetDlgItem(parentHwnd, buttonid);
+			IntPtr buttonPtr = GetDlgItem(parentHwnd, buttonid);
 			SendMessage(buttonPtr, BM_CLICK, 0, 0);
 		}
 
-        public static IntPtr GetChildWindowHwnd(IntPtr parentHwnd, string className)
+		public static IntPtr GetChildWindowHwnd(IntPtr parentHwnd, string className)
 		{
-			var hWnd = IntPtr.Zero;
+			IntPtr hWnd = IntPtr.Zero;
 			enumChildWindowClassName = className;
 
 			// Go throught the child windows of the dialog window
-			EnumChildProc childProc = EnumChildWindows;
+			EnumChildProc childProc = new EnumChildProc(EnumChildWindows);
 			EnumChildWindows(parentHwnd, childProc, ref hWnd);
 
+			// If a logon dialog window is found hWnd will be set.
 			return hWnd;
 		}
 
@@ -510,5 +510,15 @@ namespace WatiN.Core
 		}
 
 		#endregion Methods
+	}
+}
+
+namespace WatiN.Core.Interfaces
+{
+	internal interface IWebBrowser2Processor
+	{
+		HTMLDocument HTMLDocument();
+		void Process(IWebBrowser2 webBrowser2);
+		bool Continue();
 	}
 }

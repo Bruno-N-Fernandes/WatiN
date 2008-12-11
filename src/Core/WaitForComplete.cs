@@ -82,8 +82,8 @@ namespace WatiN.Core
 		protected virtual void WaitForCompleteOrTimeout()
 		{
 			WaitWhileMainDocumentNotAvailable(_domContainer);
-			WaitWhileDocumentStateNotComplete((IHTMLDocument2) _domContainer.NativeDocument.Object);
-			WaitForFramesToComplete((IHTMLDocument2) _domContainer.NativeDocument.Object);
+			WaitWhileDocumentStateNotComplete(_domContainer.HtmlDocument);
+			WaitForFramesToComplete(_domContainer.HtmlDocument);
 		}
 
 		protected virtual void WaitForFramesToComplete(IHTMLDocument2 maindocument)
@@ -202,7 +202,7 @@ namespace WatiN.Core
 		{
 			try
 			{
-				return (IHTMLDocument2) domContainer.NativeDocument.Object;
+				return domContainer.HtmlDocument;
 			}
 			catch
 			{
@@ -219,7 +219,7 @@ namespace WatiN.Core
 				// to do further processing seems to solve this problem.
 				try
 				{
-					var readyState = document.readyState;
+					string readyState = document.readyState;
 					return true;
 				}
 				catch {}

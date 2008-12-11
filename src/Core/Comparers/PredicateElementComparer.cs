@@ -16,6 +16,8 @@
 
 #endregion Copyright
 
+#if !NET11
+
 using System;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
@@ -57,3 +59,4 @@ namespace WatiN.Core.Comparers
         }
     }
 }
+#endif

@@ -43,23 +43,24 @@ namespace WatiN.Core.DialogHandlers
                 window.ToFront();
                 window.SetActivate();
 
-                var inputBoxHwnd = new Hwnd(NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit"));
+                Window inputBox = new
+                Window(NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit"));
 
-                if (inputBoxHwnd.hwnd == IntPtr.Zero) return false;
-
-                if (_cancel)
+                if (inputBox.Hwnd != IntPtr.Zero)
                 {
-                    window.ForceClose();
-                }
-                else
-                {
-                    inputBoxHwnd.SetFocus();
-                    inputBoxHwnd.SendString(_input);
+                    if (_cancel)
+                    {
+                        window.ForceClose();
+                    }
+                    else
+                    {
+                        NativeMethods.SetActiveWindow(inputBox.Hwnd);
 
-                    var okButton = new WinButton(1, window.Hwnd);
-                    okButton.Click();
+                        System.Windows.Forms.SendKeys.SendWait(_input);
+                        System.Windows.Forms.SendKeys.SendWait("{ENTER}");
+                    }
+                    return true;
                 }
-                return true;
             }
             return false;
         }

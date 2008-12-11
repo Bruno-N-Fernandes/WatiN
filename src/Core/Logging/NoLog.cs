@@ -22,6 +22,10 @@ namespace WatiN.Core.Logging
 {
 	public class NoLog : ILogWriter
 	{
-	    public void LogAction(string message) {}
+		#region ILogWriter Members
+
+		public void LogAction(string message) {}
+
+		#endregion
 	}
 }

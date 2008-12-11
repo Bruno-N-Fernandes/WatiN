@@ -21,9 +21,10 @@ using WatiN.Core.Exceptions;
 
 namespace WatiN.Core.UnitTests
 {
+#if !NET11
     using NUnit.Framework;
     using NUnit.Framework.SyntaxHelpers;
-    using Comparers;
+    using WatiN.Core.Comparers;
 
     [TestFixture]
     public class PredicateComparerTests : BaseWithIETests
@@ -88,4 +89,5 @@ namespace WatiN.Core.UnitTests
             bool exists = button.Exists;
         }
     }
+#endif
 }

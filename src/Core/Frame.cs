@@ -16,11 +16,11 @@
 
 #endregion Copyright
 
+using System;
 using System.Globalization;
 using mshtml;
 using SHDocVw;
 using WatiN.Core.Constraints;
-using WatiN.Core.InternetExplorer;
 using StringComparer = WatiN.Core.Comparers.StringComparer;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
@@ -32,8 +32,8 @@ namespace WatiN.Core
 	/// </summary>
 	public class Frame : Document, IAttributeBag
 	{
-		private readonly IHTMLDocument3 _frameSetParent;
-		private readonly string _frameElementUniqueId;
+		private IHTMLDocument3 _frameSetParent;
+		private string _frameElementUniqueId;
 		private Element frameElement;
 
 		/// <summary>
@@ -44,7 +44,7 @@ namespace WatiN.Core
 		/// <param name="htmlDocument">The HTML document.</param>
 		/// <param name="frameSetParent">The frame set parent.</param>
 		/// <param name="frameElementUniqueId">The frame element unique id.</param>
-		public Frame(DomContainer domContainer, IHTMLDocument2 htmlDocument, IHTMLDocument3 frameSetParent, string frameElementUniqueId) : base(domContainer, new IEDocument(htmlDocument))
+		public Frame(DomContainer domContainer, IHTMLDocument2 htmlDocument, IHTMLDocument3 frameSetParent, string frameElementUniqueId) : base(domContainer, htmlDocument)
 		{
 			_frameSetParent = frameSetParent;
 			_frameElementUniqueId = frameElementUniqueId;
@@ -89,9 +89,13 @@ namespace WatiN.Core
 		{
 			if(frameElement == null)
 			{
-				var element = GetFrameElement("FRAME") ?? GetFrameElement("IFRAME");
+				IHTMLElement2 element = GetFrameElement("FRAME");
+				if(element == null)			
+				{
+					element = GetFrameElement("IFRAME");
+				}
 
-			    if (element == null)
+				if (element == null)
 				{
 					throw new WatiNException("element shouldn't be null");
 				}
@@ -103,7 +107,7 @@ namespace WatiN.Core
 
 		private IHTMLElement2 GetFrameElement(string tagname) 
 		{
-			var elements = _frameSetParent.getElementsByTagName(tagname);
+			IHTMLElementCollection elements = _frameSetParent.getElementsByTagName(tagname);
 
 			foreach (DispHTMLBaseElement element in elements)
 			{
@@ -117,7 +121,7 @@ namespace WatiN.Core
 
 		internal static int GetFrameCountFromHTMLDocument(HTMLDocument htmlDocument)
 		{
-			var processor = new FrameCountProcessor(htmlDocument);
+			FrameCountProcessor processor = new FrameCountProcessor(htmlDocument);
 
 			NativeMethods.EnumIWebBrowser2Interfaces(processor);
 
@@ -126,7 +130,7 @@ namespace WatiN.Core
 
 		internal static IWebBrowser2 GetFrameFromHTMLDocument(int frameIndex, HTMLDocument htmlDocument)
 		{
-			var processor = new FrameByIndexProcessor(frameIndex, htmlDocument);
+			FrameByIndexProcessor processor = new FrameByIndexProcessor(frameIndex, htmlDocument);
 
 			NativeMethods.EnumIWebBrowser2Interfaces(processor);
 

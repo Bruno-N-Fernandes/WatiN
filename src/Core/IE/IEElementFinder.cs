@@ -18,11 +18,9 @@
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Threading;
 using mshtml;
 using WatiN.Core.Constraints;
-using WatiN.Core.UtilityClasses;
 using StringComparer = WatiN.Core.Comparers.StringComparer;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
@@ -77,7 +75,11 @@ namespace WatiN.Core.InternetExplorer
 
         private static BaseConstraint GetConstraint(BaseConstraint constraint)
         {
-            return constraint ?? new AlwaysTrueConstraint();
+            if (constraint == null)
+            {
+                return new AlwaysTrueConstraint();
+            }
+            return constraint;
         }
 
 	    public virtual INativeElement FindFirst()
@@ -89,11 +91,11 @@ namespace WatiN.Core.InternetExplorer
 		{
 			foreach (ElementTag elementTag in tagsToFind)
 			{
-				var elements = findElementsByAttribute(elementTag, constraint, true);
+				ArrayList elements = findElementsByAttribute(elementTag, constraint, true);
 
 				if (elements.Count > 0)
 				{
-					return elements[0];
+					return new IEElement(elements[0]);
 				}
 			}
 
@@ -105,7 +107,7 @@ namespace WatiN.Core.InternetExplorer
 			get { return ElementTag.ElementTagsToString(tagsToFind); }
 		}
 
-		public string ConstraintToString
+		public string ConstriantToString
 		{
 			get { return _constraint.ConstraintToString(); }
 		}
@@ -115,12 +117,12 @@ namespace WatiN.Core.InternetExplorer
 			tagsToFind.Add(new ElementTag(tagName, inputType));
 		}
 
-		public IEnumerable<INativeElement> FindAll()
+		public ArrayList FindAll()
 		{
 			return FindAll(_constraint);
 		}
 
-		public IEnumerable<INativeElement> FindAll(BaseConstraint constraint)
+		public ArrayList FindAll(BaseConstraint constraint)
 		{
 		    if (tagsToFind.Count == 1)
 			{
@@ -130,9 +132,9 @@ namespace WatiN.Core.InternetExplorer
 		    return FindAllWithMultipleTags(constraint);
 		}
 
-	    private IEnumerable<INativeElement> FindAllWithMultipleTags(BaseConstraint constraint)
+	    private ArrayList FindAllWithMultipleTags(BaseConstraint constraint)
 	    {
-	        var elements = new List<INativeElement>();
+	        ArrayList elements = new ArrayList();
 
 	        foreach (ElementTag elementTag in tagsToFind)
 	        {
@@ -142,11 +144,11 @@ namespace WatiN.Core.InternetExplorer
 	        return elements;
 	    }
 
-		private List<INativeElement> findElementsByAttribute(ElementTag elementTag, BaseConstraint constraint, bool returnAfterFirstMatch)
+		private ArrayList findElementsByAttribute(ElementTag elementTag, BaseConstraint constraint, bool returnAfterFirstMatch)
 		{
 			// Get elements with the tagname from the page
 		    constraint.Reset();
-            var attributeBag = new ElementAttributeBag(_domContainer);
+            ElementAttributeBag attributeBag = new ElementAttributeBag(_domContainer);
 
             if (FindByExactMatchOnIdPossible(constraint))
             {
@@ -155,19 +157,19 @@ namespace WatiN.Core.InternetExplorer
             return FindElements(constraint, elementTag, attributeBag, returnAfterFirstMatch, _elementCollection);
 		}
 
-	    public List<INativeElement> FindElements(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IElementCollection elementCollection)
+	    public static ArrayList FindElements(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IElementCollection elementCollection)
 	    {
-	        var elements = elementTag.GetElementCollection((IHTMLElementCollection)elementCollection.Elements);
-            var children = new List<INativeElement>();
+	        IHTMLElementCollection elements = elementTag.GetElementCollection(elementCollection.Elements);
+            ArrayList children = new ArrayList();
 
 	        if (elements != null)
 	        {
 	            // Loop through each element and evaluate
-	            var length = elements.length;
-	            for (var index = 0; index < length; index++ )
+	            int length = elements.length;
+	            for (int index = 0; index < length; index++ )
                 {
-                    var element = (IHTMLElement)elements.item(index, null);
-                    if (element != null && FinishedAddingChildrenThatMetTheConstraints(constraint, elementTag, attributeBag, returnAfterFirstMatch, element, children))
+                    IHTMLElement element = (IHTMLElement)elements.item(index, null);
+                    if (FinishedAddingChildrenThatMetTheConstraints(constraint, elementTag, attributeBag, returnAfterFirstMatch, element, ref children))
                     {
                         return children;
                     }
@@ -177,36 +179,34 @@ namespace WatiN.Core.InternetExplorer
 	        return children;
 	    }
 
-        private List<INativeElement> FindElementById(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IElementCollection elementCollection)
+        private static ArrayList FindElementById(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IElementCollection elementCollection)
 	    {
-            var children = new List<INativeElement>();
+            ArrayList children = new ArrayList();
 
-	        var element = elementTag.GetElementById((IHTMLElementCollection)elementCollection.Elements, ((AttributeConstraint)constraint).Value);
+	        IHTMLElement element = elementTag.GetElementById(elementCollection.Elements, ((AttributeConstraint)constraint).Value);
 
 	        if (element != null)
 	        {
-	            FinishedAddingChildrenThatMetTheConstraints(constraint, elementTag, attributeBag, returnAfterFirstMatch, element, children);
+	            FinishedAddingChildrenThatMetTheConstraints(constraint, elementTag, attributeBag, returnAfterFirstMatch, element, ref children);
 	        }
 	        return children;
 	    }
 
-	    private bool FinishedAddingChildrenThatMetTheConstraints(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IHTMLElement element, ICollection<INativeElement> children)
+	    private static bool FinishedAddingChildrenThatMetTheConstraints(BaseConstraint constraint, ElementTag elementTag, ElementAttributeBag attributeBag, bool returnAfterFirstMatch, IHTMLElement element, ref ArrayList children)
 	    {            
-            var nativeElement = _domContainer.NativeBrowser.CreateElement(element);
-            
-            waitUntilElementReadyStateIsComplete(nativeElement);
+	        waitUntilElementReadyStateIsComplete(element);
 
-            attributeBag.INativeElement = nativeElement;
+	        attributeBag.IHTMLElement = element;
 
-	        var validElementType = true;
+	        bool validElementType = true;
             if (elementTag.IsInputElement)
             {
-                validElementType = elementTag.CompareInputTypes(nativeElement);
+                validElementType = elementTag.CompareInputTypes(new IEElement(element));
             }
 
 	        if (validElementType && constraint.Compare(attributeBag))
 	        {
-	            children.Add(nativeElement);
+	            children.Add(element);
 	            if (returnAfterFirstMatch)
 	            {
 	                return true;
@@ -217,7 +217,7 @@ namespace WatiN.Core.InternetExplorer
 
 	    private static bool FindByExactMatchOnIdPossible(BaseConstraint constraint)
 	    {
-            var attributeConstraint = constraint as AttributeConstraint;
+            Constraints.AttributeConstraint attributeConstraint = constraint as AttributeConstraint;
 			
             return attributeConstraint != null && 
                    StringComparer.AreEqual(attributeConstraint.AttributeName, "id", true) && 
@@ -225,7 +225,7 @@ namespace WatiN.Core.InternetExplorer
                    attributeConstraint.Comparer.GetType() == typeof(StringComparer);
 		}
 
-	    private static void waitUntilElementReadyStateIsComplete(INativeElement element)
+	    private static void waitUntilElementReadyStateIsComplete(IHTMLElement element)
 		{
 			//TODO: See if this method could be dropped, it seems to give
 			//      more trouble (uninitialized state of elements)
@@ -242,18 +242,21 @@ namespace WatiN.Core.InternetExplorer
 			// it's quite probable that it will never reach Complete.
 			// Like for elements that could not load an image or ico
 			// or some other bits not part of the HTML page.     
-	        var tryActionUntilTimeOut = new TryActionUntilTimeOut(30);
-            var ihtmlElement2 = ((IHTMLElement2)element.Object);
-            var success = tryActionUntilTimeOut.Try(() =>
-            {
-                var readyState = ihtmlElement2.readyStateValue;
-                return (readyState == 0 || readyState == 4);
-            });
+			SimpleTimer timeoutTimer = new SimpleTimer(30);
 
-	        if (success) return;
+			do
+			{
+				int readyState = ((IHTMLElement2) element).readyStateValue;
 
-            var ihtmlElement = ((IHTMLElement) element.Object);
-            throw new WatiNException("Element didn't reach readystate = complete within 30 seconds: " + ihtmlElement.outerText);
+				if (readyState == 0 || readyState == 4)
+				{
+					return;
+				}
+
+				Thread.Sleep(Settings.SleepTime);
+			} while (!timeoutTimer.Elapsed);
+
+			throw new WatiNException("Element didn't reach readystate = complete within 30 seconds: " + element.outerText);
 		}
 	}
 }

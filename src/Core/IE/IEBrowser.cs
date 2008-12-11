@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using WatiN.Core.Constraints;
 using WatiN.Core.Interfaces;
@@ -32,10 +33,5 @@ namespace WatiN.Core.InternetExplorer
 		{
 			return new IEElement(element);
 		}
-
-	    public INativeDocument CreateDocument(object document)
-	    {
-	        return new IEDocument(document);
-	    }
 	}
 }

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Specialized;
+using System.Text;
+using System.Threading;
 using mshtml;
 using WatiN.Core.Interfaces;
 
@@ -15,8 +17,6 @@ namespace WatiN.Core.InternetExplorer
 
 		public IEElement(object element)
 		{
-            if (element == null) throw new ArgumentNullException("element");
-            if (element is INativeElement) throw new Exception("INativeElement not allowed");
 			_element = element;
 		}
 
@@ -46,10 +46,10 @@ namespace WatiN.Core.InternetExplorer
 		{
 			get
 			{
-				var node = domNode.nextSibling;
+				IHTMLDOMNode node = domNode.nextSibling;
 				while (node != null)
 				{
-					var nextSibling = node as IHTMLElement;
+					IHTMLElement nextSibling = node as IHTMLElement;
 					if (nextSibling != null)
 					{
 						return new IEElement(nextSibling);
@@ -69,10 +69,10 @@ namespace WatiN.Core.InternetExplorer
 		{
 			get
 			{
-				var node = domNode.previousSibling;
+				IHTMLDOMNode node = domNode.previousSibling;
 				while (node != null)
 				{
-					var previousSibling = node as IHTMLElement;
+					IHTMLElement previousSibling = node as IHTMLElement;
 					if (previousSibling != null)
 					{
 						return new IEElement(previousSibling);
@@ -114,9 +114,18 @@ namespace WatiN.Core.InternetExplorer
 		{
 			get
 			{
-				var parentNode = domNode.parentNode as IHTMLElement;
-				return parentNode != null ? new IEElement(parentNode) : null;
+				IHTMLElement parentNode = domNode.parentNode as IHTMLElement;
+				if (parentNode != null)
+				{
+					return new IEElement(parentNode);
+				}
+				return null;
 			}
+		}
+
+		public Style Style
+		{
+			get { return new Style(htmlElement.style); }
 		}
 
 		/// <summary>
@@ -128,7 +137,7 @@ namespace WatiN.Core.InternetExplorer
 		/// <returns>The value of the attribute if available; otherwise <c>null</c> is returned.</returns>
 		public string GetAttributeValue(string attributeName)
 		{
-			var attributeValue = htmlElement.getAttribute(attributeName, 0);
+			object attributeValue = htmlElement.getAttribute(attributeName, 0);
 
 			if (attributeValue == DBNull.Value || attributeValue == null)
 			{
@@ -160,53 +169,14 @@ namespace WatiN.Core.InternetExplorer
 			}
 		}
 
-	    public object Objects
-	    {
-            get { return htmlElement.all; }
-	    }
-
-	    public void FireEventAsync(string eventName, NameValueCollection eventProperties)
+        public void FireEventAsync(string eventName, NameValueCollection eventProperties)
         {
-            var scriptCode = UtilityClass.CreateJavaScriptFireEventCode(eventProperties, DispHtmlBaseElement, eventName);
-            var window = ((IHTMLDocument2)DispHtmlBaseElement.document).parentWindow;
+            StringBuilder scriptCode = UtilityClass.CreateJavaScriptFireEventCode(eventProperties, DispHtmlBaseElement, eventName);
+            IHTMLWindow2 window = ((IHTMLDocument2)DispHtmlBaseElement.document).parentWindow;
 
-            var asyncScriptRunner = new AsyncScriptRunner(scriptCode.ToString(), window);
+            AsyncScriptRunner asyncScriptRunner = new AsyncScriptRunner(scriptCode.ToString(), window);
 
-            UtilityClass.AsyncActionOnBrowser(asyncScriptRunner.FireEvent);
-        }
-
-        /// <summary>
-        /// This methode can be used if the attribute isn't available as a property of
-        /// of this <see cref="Style"/> class.
-        /// </summary>
-        /// <param name="attributeName">The attribute name. This could be different then named in
-        /// the HTML. It should be the name of the property exposed by IE on it's style object.</param>
-        /// <returns>The value of the attribute if available; otherwise <c>null</c> is returned.</returns>
-        public string GetStyleAttributeValue(string attributeName)
-        {
-            if (UtilityClass.IsNullOrEmpty(attributeName))
-            {
-                throw new ArgumentNullException("attributeName", "Null or Empty not allowed.");
-            }
-
-            var attributeValue = GetStyleAttributeValue(attributeName, htmlElement.style);
-
-            if (attributeValue == DBNull.Value || attributeValue == null)
-            {
-                return null;
-            }
-
-            return attributeValue.ToString();
-        }
-
-        internal static object GetStyleAttributeValue(string attributeName, IHTMLStyle style)
-        {
-            if (attributeName.IndexOf(Char.Parse("-")) > 0)
-            {
-                attributeName = attributeName.Replace("-", "");
-            }
-
-            return style.getAttribute(attributeName, 0);
+            UtilityClass.AsyncActionOnBrowser(new ThreadStart(asyncScriptRunner.FireEvent));
         }
 
 		protected IHTMLElement htmlElement
@@ -239,10 +209,11 @@ namespace WatiN.Core.InternetExplorer
 			set { htmlElement.style.backgroundColor = value; }
 		}
 
-		public object Object
+		public object NativeElement
 		{
 			get { return _element; }
 		}
+
 
 	    public IAttributeBag GetAttributeBag(DomContainer domContainer)
 	    {
@@ -250,7 +221,7 @@ namespace WatiN.Core.InternetExplorer
 	        {
 	            _attributeBag = new ElementAttributeBag(domContainer);
 	        }
-	        _attributeBag.INativeElement = this;
+	        _attributeBag.IHTMLElement = htmlElement;
 	        return _attributeBag;
 	    }
 
@@ -273,13 +244,8 @@ namespace WatiN.Core.InternetExplorer
 
 		public string TagName
 		{
-			get { return htmlElement.tagName; }
+			get { return GetAttributeValue("tagName"); }
 		}
-
-//		public string TagName
-//		{
-//			get { return GetAttributeValue("tagName"); }
-//		}
 	}
 
     public class AsyncScriptRunner

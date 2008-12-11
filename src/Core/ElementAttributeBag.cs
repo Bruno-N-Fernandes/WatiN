@@ -16,47 +16,56 @@
 
 #endregion Copyright
 
+using System;
+using System.Globalization;
+using mshtml;
 using WatiN.Core.Constraints;
+using StringComparer = WatiN.Core.Comparers.StringComparer;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
 {
 	/// <summary>
-	/// Wrapper around the <see cref="INativeElement"/> object. Used by <see cref="BaseConstraint.Compare"/>.
+	/// Wrapper around the <see cref="mshtml.IHTMLElement"/> object. Used by <see cref="BaseConstraint.Compare"/>.
 	/// </summary>
 	public class ElementAttributeBag : IAttributeBag
 	{
-		private INativeElement _nativeElement;
+		private IHTMLElement _htmlElement;
 		private Element _element;
 		private Element _elementTyped;
+	    private DomContainer _domContainer;
 
-	    public ElementAttributeBag(DomContainer domContainer) : this (domContainer, null)
+        public ElementAttributeBag(DomContainer domContainer) : this (domContainer, null)
         {}
 
-		public ElementAttributeBag(DomContainer domContainer, INativeElement element)
+		public ElementAttributeBag(DomContainer domContainer, IHTMLElement element)
 		{
-            DomContainer = domContainer;
-            INativeElement = element;
+            _domContainer = domContainer;
+            IHTMLElement = element;
 		}
 
 		/// <summary>
 		/// Gets or sets the IHTMLelement from which the attribute values are read.
 		/// </summary>
 		/// <value>The IHTMLelement.</value>
-		public INativeElement INativeElement
+		public IHTMLElement IHTMLElement
 		{
-			get { return _nativeElement; }
+			get { return _htmlElement; }
 			set 
             { 
-                _nativeElement = value;
+                _htmlElement = value;
                 _element = null;
                 _elementTyped = null;
             }
 		}
 
-	    public DomContainer DomContainer { get; set; }
-
-	    /// <summary>
+        public DomContainer DomContainer
+        {
+            get { return _domContainer; }
+            set { _domContainer = value; }
+        }
+        
+        /// <summary>
 		/// Returns a typed Element instance that can be cast to an ElementsContainer.
 		/// </summary>
 		/// <value>The element.</value>
@@ -66,7 +75,7 @@ namespace WatiN.Core
 			{
 				if (_element == null)
 				{
-				    _element = TypedElementFactory.GetDefaultReturnElement(DomContainer, INativeElement);
+				    _element = TypedElementFactory.GetDefaultReturnElement(DomContainer, DomContainer.NativeBrowser.CreateElement(IHTMLElement));
 				}
 
 				return _element;
@@ -83,7 +92,7 @@ namespace WatiN.Core
 			{
 				if (_elementTyped == null)
 				{
-                    _elementTyped = TypedElementFactory.CreateTypedElement(DomContainer, INativeElement);
+                    _elementTyped = TypedElementFactory.CreateTypedElement(DomContainer, DomContainer.NativeBrowser.CreateElement(IHTMLElement));
 				    _element = _elementTyped;
 				}
 
@@ -98,7 +107,28 @@ namespace WatiN.Core
 		/// <returns>The value of the attribute</returns>
 		public string GetValue(string attributename)
 		{
-	        return Element.GetAttributeValue(attributename, _nativeElement);
-        }
+			if (StringComparer.AreEqual(attributename, "style", true))
+			{
+				return _htmlElement.style.cssText;
+			}
+
+			object attributeValue;
+
+			if (attributename.ToLower(CultureInfo.InvariantCulture).StartsWith("style."))
+			{
+				attributeValue = Style.GetAttributeValue(attributename.Substring(6), _htmlElement.style);
+			}
+			else
+			{
+				attributeValue = _htmlElement.getAttribute(attributename, 0);
+			}
+
+            if (attributeValue == DBNull.Value || attributeValue == null)
+			{
+				return null;
+			}
+
+			return attributeValue.ToString();
+		}
 	}
 }

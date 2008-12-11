@@ -16,8 +16,8 @@
 
 #endregion Copyright
 
-using Moq;
 using NUnit.Framework;
+using Rhino.Mocks;
 using WatiN.Core.Interfaces;
 using WatiN.Core.Logging;
 
@@ -28,6 +28,8 @@ namespace WatiN.Core.UnitTests
 	{
 		private const string LogMessage = "Call LogAction on mock";
 
+		private MockRepository mocks;
+		private ILogWriter mockLogWriter;
 		private ILogWriter originalLogWriter;
 
 		[TestFixtureSetUp]
@@ -40,6 +42,13 @@ namespace WatiN.Core.UnitTests
 		public void FixtureTearDown()
 		{
 			Logger.LogWriter = originalLogWriter;
+		}
+
+		[SetUp]
+		public void SetUp()
+		{
+			mocks = new MockRepository();
+			mockLogWriter = (ILogWriter) mocks.CreateMock(typeof (ILogWriter));
 		}
 
 		[Test]
@@ -59,43 +68,40 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void LogActionShouldCallLogActionOnLogWriterInstance()
 		{
-            // GIVEN
-            var logWriterMock = new Mock<ILogWriter>();
-			Logger.LogWriter = logWriterMock.Object;
+			mockLogWriter.LogAction(LogMessage);
 
-            // WHEN
-            Logger.LogAction(LogMessage);
+			mocks.ReplayAll();
 
-            // THEN
-            logWriterMock.Verify(writer => writer.LogAction(LogMessage));
-        }
+			Logger.LogWriter = mockLogWriter;
+			Logger.LogAction(LogMessage);
+
+			mocks.VerifyAll();
+		}
 
 		[Test]
 		public void LogActionWithParamsShouldCallLogActionOnLogWriterInstance()
 		{
-            // GIVEN
-            var logWriterMock = new Mock<ILogWriter>();
-            Logger.LogWriter = logWriterMock.Object;
+			mockLogWriter.LogAction("Test this and that");
 
-            // WHEN
+			mocks.ReplayAll();
+
+			Logger.LogWriter = mockLogWriter;
 			Logger.LogAction("Test {0} and {1}", "this", "that");
 
-            // THEN
-            logWriterMock.Verify(writer => writer.LogAction("Test this and that"));
-        }
+			mocks.VerifyAll();
+		}
 
 		[Test]
 		public void LogActionShouldCallLogActionOnLogWriterInstance2()
 		{
-            // GIVEN
-            var logWriterMock = new Mock<ILogWriter>();
-            Logger.LogWriter = logWriterMock.Object;
+			Logger.LogWriter = mockLogWriter;
+			mockLogWriter.LogAction(LogMessage);
 
-            // WHEN
+			mocks.ReplayAll();
+
 			Logger.LogAction(LogMessage);
 
-            // THEN
-			logWriterMock.Verify(writer => writer.LogAction(LogMessage));
+			mocks.VerifyAll();
 		}
 	}
 }

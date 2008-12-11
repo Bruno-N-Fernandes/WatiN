@@ -17,11 +17,13 @@
 #endregion Copyright
 
 using System;
-using Moq;
+using mshtml;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
 using WatiN.Core.Constraints;
+using Rhino.Mocks;
 using WatiN.Core.Interfaces;
+using WatiN.Core.InternetExplorer;
+using Iz = NUnit.Framework.SyntaxHelpers.Is;
 
 namespace WatiN.Core.UnitTests.AttributeConstraintTests
 {
@@ -42,29 +44,37 @@ namespace WatiN.Core.UnitTests.AttributeConstraintTests
 
         private static void VerifyComparerIsUsed(string tagname, bool expectedResult)
         {
-            var INativeElementStub = new Mock<INativeElement>();
-            var domContainerMock = new Mock<DomContainer>();
-            var elementAttributeBag = new ElementAttributeBag(domContainerMock.Object, INativeElementStub.Object);
+            MockRepository mocks = new MockRepository();
+            IHTMLElement IHTMLElementStub = (IHTMLElement) mocks.DynamicMock(typeof(IHTMLElement));
+            DomContainer domContainer = (DomContainer) mocks.DynamicMock(typeof (DomContainer));
+            ElementAttributeBag elementAttributeBag = new ElementAttributeBag(domContainer, IHTMLElementStub);
 
-            INativeElementStub.Expect(native => native.GetAttributeValue("tagName")).Returns("testtagname");
+            SetupResult.For(IHTMLElementStub.getAttribute("tagName", 0)).Return("testtagname");
+            SetupResult.For(domContainer.NativeBrowser).Return(new IEBrowser(domContainer));
 			
-            var elementComparerMock = new ElementComparerMock(tagname);
-            var elementConstraint = new ElementConstraint(elementComparerMock);
+            mocks.ReplayAll();
+
+            ElementComparerMock elementComparerMock = new ElementComparerMock(tagname);
+            ElementConstraint elementConstraint = new ElementConstraint(elementComparerMock);
 			
             Assert.That(elementConstraint.Compare(elementAttributeBag) == expectedResult);
+
+            mocks.VerifyAll();
         }
 
+#if !NET11
         [Test]
         public void ShouldEvaluateAlsoTheAndConstraint()
         {
-            var link1 = ie.Link(Find.ByElement(
-                                    l => l.Id != null && l.Id.StartsWith("testlink")) && Find.ByUrl("http://watin.sourceforge.net"));
-            var link2 = ie.Link(Find.ByElement(
-                                    l => l.Id != null && l.Id.StartsWith("testlink")) && Find.ByUrl("http://www.microsoft.com/"));
+            Link link1 = ie.Link(Find.ByElement(
+                                     delegate(Element l) { return l.Id != null && l.Id.StartsWith("testlink"); }) && Find.ByUrl("http://watin.sourceforge.net"));
+            Link link2 = ie.Link(Find.ByElement(
+                                     delegate(Element l) { return l.Id != null && l.Id.StartsWith("testlink"); }) && Find.ByUrl("http://www.microsoft.com/"));
 
-            Assert.That(link1.Url, Is.EqualTo("http://watin.sourceforge.net/"));
-            Assert.That(link2.Url, Is.EqualTo("http://www.microsoft.com/"));
+            Assert.That(link1.Url, Iz.EqualTo("http://watin.sourceforge.net/"));
+            Assert.That(link2.Url, Iz.EqualTo("http://www.microsoft.com/"));
         }
+#endif
 
         public class ElementComparerMock : ICompareElement 
         {

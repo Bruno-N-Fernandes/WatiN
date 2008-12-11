@@ -17,8 +17,8 @@
 #endregion Copyright
 
 using System;
-using Moq;
 using NUnit.Framework;
+using Rhino.Mocks;
 using WatiN.Core.DialogHandlers;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
@@ -51,7 +51,7 @@ namespace WatiN.Core.UnitTests
 			{
 				Assert.AreEqual(ie1.ProcessID, ie2.ProcessID, "Processids should be the same");
 
-				var dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie1.ProcessID);
+				DialogWatcher dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie1.ProcessID);
 
 				Assert.IsNotNull(dialogWatcher, "dialogWatcher should not be null");
 				Assert.AreEqual(ie1.ProcessID, dialogWatcher.ProcessId, "Processids of ie1 and dialogWatcher should be the same");
@@ -79,23 +79,23 @@ namespace WatiN.Core.UnitTests
 
 			// Create running Internet Explorer instance but no longer referenced by 
 			// an instance of WatiN.Core.IE.
-			using (var ie = new IE(MainURI))
+			using (IE ie = new IE(MainURI))
 			{
 				ie.AutoClose = false;
 				ieProcessId = ie.ProcessID;
 			}
 
 			// Create IE instances and see if DialogWatcher behaves as expected
-			using (var ie1 = new IE())
+			using (IE ie1 = new IE())
 			{
 				Assert.AreEqual(ieProcessId, ie1.ProcessID, "ProcessIds ie and ie1 should be the same");
 
-				using (var ie2 = new IE())
+				using (IE ie2 = new IE())
 				{
 					Assert.AreEqual(ie1.ProcessID, ie2.ProcessID, "Processids ie1 and ie2 should be the same");
 				}
 
-				var dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie1.ProcessID);
+				DialogWatcher dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie1.ProcessID);
 
 				Assert.IsNotNull(dialogWatcher, "dialogWatcher should not be null");
 				Assert.AreEqual(ie1.ProcessID, dialogWatcher.ProcessId, "Processids of ie1 and dialogWatcher should be the same");
@@ -115,13 +115,13 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void DialogWatcherOfIEAndHTMLDialogShouldNotBeNull()
 		{
-			using (var ie = new IE(MainURI))
+			using (IE ie = new IE(MainURI))
 			{
 				Assert.IsNotNull(ie.DialogWatcher, "ie.DialogWatcher should not be null");
 
 				ie.Button("modalid").ClickNoWait();
 
-				using (var htmlDialog = ie.HtmlDialog(Find.ByTitle("PopUpTest")))
+				using (HtmlDialog htmlDialog = ie.HtmlDialog(Find.ByTitle("PopUpTest")))
 				{
 					Assert.IsNotNull(htmlDialog.DialogWatcher, "htmlDialog.DialogWatcher should not be null");
 				}
@@ -131,12 +131,12 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void DialogWatcherShouldKeepRunningWhenClosingHTMLDialog()
 		{
-			using (var ie = new IE(MainURI))
+			using (IE ie = new IE(MainURI))
 			{
 				ie.Button("modalid").ClickNoWait();
 
 				DialogWatcher dialogWatcher;
-				using (var htmlDialog = ie.HtmlDialog(Find.ByTitle("PopUpTest")))
+				using (HtmlDialog htmlDialog = ie.HtmlDialog(Find.ByTitle("PopUpTest")))
 				{
 					Assert.AreEqual(ie.ProcessID, htmlDialog.ProcessID, "Processids should be the same");
 
@@ -163,9 +163,9 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void ThrowReferenceCountException()
 		{
-			using (var ie = new IE())
+			using (IE ie = new IE())
 			{
-				var dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie.ProcessID);
+				DialogWatcher dialogWatcher = DialogWatcher.GetDialogWatcherFromCache(ie.ProcessID);
 				Assert.AreEqual(1, dialogWatcher.ReferenceCount);
 
 				dialogWatcher.DecreaseReferenceCount();
@@ -192,45 +192,47 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void ExceptionsInDialogHandlersShouldBeLoggedAndNeglected()
 		{
+			MockRepository mocks = new MockRepository();
+
 			//Make the mocks
-			var mockLogWriter = new Mock<ILogWriter>();
-			var mockBuggyDialogHandler = new Mock<IDialogHandler>();
-			var mockNextDialogHandler = new Mock<IDialogHandler>();
-			var mockDialog = new Mock<Window>(IntPtr.Zero);
+			ILogWriter mockLogWriter = (ILogWriter) mocks.CreateMock(typeof (ILogWriter));
+			IDialogHandler buggyDialogHandler = (IDialogHandler) mocks.CreateMock(typeof (IDialogHandler));
+			IDialogHandler nextDialogHandler = (IDialogHandler) mocks.CreateMock(typeof (IDialogHandler));
+			Window dialog = (Window) mocks.DynamicMock(typeof (Window), IntPtr.Zero);
 
 			// Handle window does check if window IsDialog and Visible
-			mockDialog.Expect(dialog => dialog.IsDialog()).Returns(true);
-			mockDialog.Expect(dialog => dialog.Visible).Returns(true);
+			Expect.Call(dialog.IsDialog()).Return(true);
+			Expect.Call(dialog.Visible).Return(true);
 
 			// If this HandleDialog is called throw an exception
-			mockBuggyDialogHandler.Expect(buggyHandler => buggyHandler.HandleDialog(mockDialog.Object)).Throws(new Exception());
-
-            // Expect Logger will be called with the exception text and stack trace
-            var expectedMessage = "Exception was thrown while DialogWatcher called HandleDialog:";
-            mockLogWriter.Expect(writer => writer.LogAction(It.IsRegex(expectedMessage)));
-
-            var exceptionMessage = "^System.Exception:.*";
-            mockLogWriter.Expect(writer => writer.LogAction(It.IsRegex(exceptionMessage)));
-			
-            // Expect the next dialogHandler will be called even do an exception
+			Expect.Call(buggyDialogHandler.HandleDialog(dialog)).Throw(new Exception());
+			// Expect Logger will be called with the exception text and stack trace
+			mockLogWriter.LogAction("");
+			LastCall.Constraints(Rhino.Mocks.Text.Like("Exception was thrown while DialogWatcher called HandleDialog:"));
+			mockLogWriter.LogAction("");
+			LastCall.Constraints(Rhino.Mocks.Text.StartsWith("System.Exception:"));
+			// Expect the next dialogHandler will be called even do an exception
 			// has been thrown by the previous handler
-			mockNextDialogHandler.Expect(nextHandler => nextHandler.HandleDialog(mockDialog.Object)).Returns(true);
+			Expect.Call(nextDialogHandler.HandleDialog(dialog)).Return(true);
+
+			mocks.ReplayAll();
 
 			// Set Logger
-			Logger.LogWriter = mockLogWriter.Object;
+			Logger.LogWriter = mockLogWriter;
 
 			// Add dialogHandlers
-			var dialogWatcher = new DialogWatcher(0);
-			dialogWatcher.Add(mockBuggyDialogHandler.Object);
-			dialogWatcher.Add(mockNextDialogHandler.Object);
+			DialogWatcher dialogWatcher = new DialogWatcher(0);
+			dialogWatcher.Add(buggyDialogHandler);
+			dialogWatcher.Add(nextDialogHandler);
 
 			Assert.IsNull(dialogWatcher.LastException, "LastException should be null");
 
 			// Call HandleDialog
-			dialogWatcher.HandleWindow(mockDialog.Object);
+			dialogWatcher.HandleWindow(dialog);
 
 			Assert.IsNotNull(dialogWatcher.LastException, "LastException should not be null");
-            mockLogWriter.VerifyAll();
+
+			mocks.VerifyAll();
 		}
 
 		[Test]
@@ -241,7 +243,7 @@ namespace WatiN.Core.UnitTests
 			Assert.That(Settings.AutoStartDialogWatcher, "Unexpected value for AutoStartDialogWatcher");
 
 			Settings.AutoStartDialogWatcher = false;
-			using (var ie = new IE())
+			using (IE ie = new IE())
 			{
 				Assert.That(ie.DialogWatcher, NUnit.Framework.SyntaxHelpers.Is.Null);
 			}

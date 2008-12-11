@@ -16,9 +16,10 @@
 
 #endregion Copyright
 
-using System;
-using Moq;
+using System.Text.RegularExpressions;
+using mshtml;
 using NUnit.Framework;
+using Rhino.Mocks;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core.UnitTests
@@ -26,36 +27,52 @@ namespace WatiN.Core.UnitTests
 	[TestFixture]
 	public class DomContainerTests
 	{
-		private Mock<SHDocVw.InternetExplorer> _internetExplorerMock;
+		private MockRepository _mockRepository;
+		private SHDocVw.InternetExplorer _mockInternetExplorer;
 		private IE _ie;
-		private Mock<IWait> _waitMock;
+		private IHTMLDocument2 _mockHTMLDocument2;
+
+		private IWait _mockWait;
+		private IHTMLElement _mockIHTMLElement;
 
 		[SetUp]
 		public void Setup()
 		{
 			Settings.AutoStartDialogWatcher = false;
+			_mockRepository = new MockRepository();
 
-            _internetExplorerMock = new Mock<SHDocVw.InternetExplorer>();
-            _ie = new IE(_internetExplorerMock.Object);
+			_mockInternetExplorer = (SHDocVw.InternetExplorer) _mockRepository.DynamicMock(typeof (SHDocVw.InternetExplorer));
+			_mockHTMLDocument2 = (IHTMLDocument2) _mockRepository.DynamicMock(typeof (IHTMLDocument2));
+			_mockIHTMLElement = (IHTMLElement) _mockRepository.DynamicMock(typeof (IHTMLElement));
 
-            _waitMock = new Mock<IWait>();
+			SetupResult.For(_mockInternetExplorer.Document).Return(_mockHTMLDocument2);
+			SetupResult.For(_mockHTMLDocument2.body).Return(_mockIHTMLElement);
+			SetupResult.For(_mockIHTMLElement.innerText).Return("Test 'Contains text in DIV' text");
 
+			_mockRepository.Replay(_mockIHTMLElement);
+			_mockRepository.Replay(_mockHTMLDocument2);
+			_mockRepository.Replay(_mockInternetExplorer);
+
+			_ie = new IE(_mockInternetExplorer);
+			_mockWait = (IWait) _mockRepository.CreateMock(typeof (IWait));
 		}
 
-        [Test]
+		[Test]
 		public void WaitForCompletUsesGivenWaitClass()
 		{
-			_waitMock.Expect(wait => wait.DoWait());
+			_mockWait.DoWait();
 
-			_ie.WaitForComplete(_waitMock.Object);
+			_mockRepository.Replay(_mockWait);
 
-			_waitMock.VerifyAll();
+			_ie.WaitForComplete(_mockWait);
+
+			_mockRepository.Verify(_mockWait);
 		}
 
 	    [Test]
 	    public void WaitForCompleteShouldUseTimeOutProvidedThroughtTheConstructor()
 	    {
-	        var waitForCompleteMock = new WaitForCompleteMock(_ie, 333);
+	        WaitForCompleteMock waitForCompleteMock = new WaitForCompleteMock(_ie, 333);
 
             Assert.That(waitForCompleteMock, NUnit.Framework.SyntaxHelpers.Is.InstanceOfType(typeof(WaitForComplete)),"Should inherit WaitForComplete");
 
@@ -67,9 +84,9 @@ namespace WatiN.Core.UnitTests
 	    [Test]
 	    public void WaitForCompleteShouldUseWaitForCompleteTimeOutSetting()
 	    {
-	        var expectedWaitForCompleteTimeOut = Settings.WaitForCompleteTimeOut;
+	        int expectedWaitForCompleteTimeOut = Settings.WaitForCompleteTimeOut;
 
-	        var waitForCompleteMock = new WaitForCompleteMock(_ie);
+	        WaitForCompleteMock waitForCompleteMock = new WaitForCompleteMock(_ie);
 
             Assert.That(waitForCompleteMock, NUnit.Framework.SyntaxHelpers.Is.InstanceOfType(typeof(WaitForComplete)),"Should inherit WaitForComplete");
 
@@ -84,58 +101,48 @@ namespace WatiN.Core.UnitTests
 			Assert.IsInstanceOfType(typeof (Document), _ie);
 		}
 
-	    [Test]
-	    public void NativeDocumentShouldCallOnGetNativeDocument()
-	    {
-	        // GIVEN
-	        var nativeDocument = new Mock<INativeDocument>().Object;
-	        var myTestDomContainer = new MyTestDomContainer {ReturnNativeDocument = nativeDocument};
+		[Test]
+		public void Text()
+		{
+			Assert.IsTrue(_ie.Text.IndexOf("Contains text in DIV") >= 0, "Text property did not return expected contents.");
+		}
 
-	        // WHEN
-	        var result = myTestDomContainer.NativeDocument;
+		[Test]
+		public void ContainsText()
+		{
+			Assert.IsTrue(_ie.ContainsText("Contains text in DIV"), "Text not found");
+			Assert.IsFalse(_ie.ContainsText("abcde"), "Text incorrectly found");
 
-	        // THEN
-	        Assert.That(ReferenceEquals(nativeDocument, result), "Unexpected instance");
-	    }
+			Assert.IsTrue(_ie.ContainsText(new Regex("Contains text in DIV")), "Regex: Text not found");
+			Assert.IsFalse(_ie.ContainsText(new Regex("abcde")), "Regex: Text incorrectly found");
+		}
 
+		[Test]
+		public void FindText()
+		{
+			Assert.AreEqual("Contains text in DIV", _ie.FindText(new Regex("Contains .* in DIV")), "Text not found");
+			Assert.IsNull(_ie.FindText(new Regex("abcde")), "Text incorrectly found");
+		}
 
-	    [TearDown]
+		[TearDown]
 		public virtual void TearDown()
 		{
 			_ie.Dispose();
 			Settings.Reset();
 		}
-
-        private class MyTestDomContainer : DomContainer
-        {
-            public INativeDocument ReturnNativeDocument { get; set; }
-
-            public override IntPtr hWnd
-            {
-                get { throw new System.NotImplementedException(); }
-            }
-
-            public override INativeDocument OnGetNativeDocument()
-            {
-                return ReturnNativeDocument;
-            }
-
-            public override INativeBrowser NativeBrowser
-            {
-                get { throw new System.NotImplementedException(); }
-            }
-        }
 	}
 
     public class WaitForCompleteMock : WaitForComplete
     {
+        private int _timeout;
+
         public WaitForCompleteMock(DomContainer domContainer) : base(domContainer) {}
 
         public WaitForCompleteMock(DomContainer domContainer, int waitForCompleteTimeOut) : base(domContainer, waitForCompleteTimeOut) {}
 
         protected override SimpleTimer InitTimeout()
         {
-            Timeout = base.InitTimeout().Timeout;
+            _timeout = base.InitTimeout().Timeout;
             return null;
         }
 
@@ -144,6 +151,9 @@ namespace WatiN.Core.UnitTests
             // Finished;
         }
 
-        public int Timeout { get; private set; }
+        public int Timeout
+        {
+            get { return _timeout; }
+        }
     }
 }

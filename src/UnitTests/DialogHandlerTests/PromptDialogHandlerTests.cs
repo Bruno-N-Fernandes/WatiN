@@ -36,9 +36,9 @@ namespace WatiN.Core.UnitTests.DialogHandlerTests
         [Test, Ignore("IE popup blocker will cause this test to fail. Read method documentation to run this test manually")]
         public void PromptDialogHandler()
         {
-            var ie = IE.AttachToIE(Find.ByUrl(new Regex("TestEvents.html$")));
+            IE ie = IE.AttachToIE(Find.ByUrl(new Regex("TestEvents.html$")));
 
-            var handler = new PromptDialogHandler("Hello");
+            PromptDialogHandler handler = new PromptDialogHandler("Hello");
             using (new UseDialogOnce(ie.DialogWatcher, handler))
             {
                 ie.Button("showPrompt").Click();

@@ -21,15 +21,18 @@ using System.Collections;
 using System.Collections.Specialized;
 using System.Text.RegularExpressions;
 using System.Threading;
+using mshtml;
 using WatiN.Core.Comparers;
 using WatiN.Core.Constraints;
 using WatiN.Core.Exceptions;
 using WatiN.Core.Interfaces;
+using WatiN.Core.InternetExplorer;
 using WatiN.Core.Logging;
-using WatiN.Core.UtilityClasses;
 
 namespace WatiN.Core
 {
+#if !NET11
+
 	/// <summary>
 	/// This is the base class for all other element types in this project, like
 	/// Button, Checkbox etc.. It provides common functionality to all these elements
@@ -37,6 +40,10 @@ namespace WatiN.Core
 	public class Element<E> : Element where E : Element
 	{
 	    public Element(DomContainer domContainer, INativeElement nativeElement) : base(domContainer, nativeElement)
+	    {}
+
+        [Obsolete("Use the constructor accepting INativeElement instead")]
+	    public Element(DomContainer domContainer, object element) : this(domContainer, domContainer.NativeBrowser.CreateElement(element))
 	    {}
 
 	    public Element(Element element, ArrayList elementTags) : base(element, elementTags)
@@ -64,7 +71,9 @@ namespace WatiN.Core
 		{
             WaitUntil(Find.ByElement(predicate), timeout);
         }
+
 	}
+#endif
 
     /// <summary>
 	/// This is the base class for all other element types in this project, like
@@ -72,10 +81,22 @@ namespace WatiN.Core
 	/// </summary>
 	public class Element : IAttributeBag
 	{
-        private INativeElement _nativeElement;
+		private DomContainer _domContainer;
+		private INativeElement _nativeElement;
 		private INativeElementFinder _nativeElementFinder;
 
 		private Stack _originalcolor;
+
+		/// <summary>
+		/// This constructor is mainly used from within WatiN.
+		/// </summary>
+		/// <param name="domContainer"><see cref="DomContainer" /> this element is located in</param>
+		/// <param name="element">The element</param>
+        [Obsolete("Use the constructor accepting INativeElement instead")]
+		public Element(DomContainer domContainer, object element)
+		{
+			initElement(domContainer, domContainer.NativeBrowser.CreateElement(element), null);
+		}
 
 		/// <summary>
 		/// This constructor is mainly used from within WatiN.
@@ -106,7 +127,7 @@ namespace WatiN.Core
 		{
 			if (ElementTag.IsValidElement(element.NativeElement, elementTags))
 			{
-				initElement(element.DomContainer, element._nativeElement, element._nativeElementFinder);
+				initElement(element._domContainer, element._nativeElement, element._nativeElementFinder);
 			}
 			else
 			{
@@ -118,7 +139,7 @@ namespace WatiN.Core
 		{
             if (domContainer == null) throw new ArgumentNullException("domContainer");
 
-			DomContainer = domContainer;
+			_domContainer = domContainer;
 			_nativeElement = nativeElement;
 			_nativeElementFinder = elementFinder;
 		}
@@ -248,7 +269,7 @@ namespace WatiN.Core
 		{
 			get
 			{
-                return TypedElementFactory.CreateTypedElement(DomContainer, NativeElement.NextSibling);
+                return TypedElementFactory.CreateTypedElement(_domContainer, NativeElement.NextSibling);
 			}
         }
 
@@ -260,7 +281,7 @@ namespace WatiN.Core
 		{
 			get
 			{
-                return TypedElementFactory.CreateTypedElement(DomContainer, NativeElement.PreviousSibling);
+                return TypedElementFactory.CreateTypedElement(_domContainer, NativeElement.PreviousSibling);
 			}
 		}
 
@@ -294,13 +315,14 @@ namespace WatiN.Core
 		{
 			get
 			{
-                return TypedElementFactory.CreateTypedElement(DomContainer, NativeElement.Parent);
+                return TypedElementFactory.CreateTypedElement(_domContainer, NativeElement.Parent);
             }
         }
 
 		public Style Style
 		{
-            get { return new Style(NativeElement); }
+			//TODO: Style class should also delegate to a browser specific instance
+			get { return NativeElement.Style; }
 		}
 
 		/// <summary>
@@ -310,31 +332,19 @@ namespace WatiN.Core
 		/// <param name="attributeName">The attribute name. This could be different then named in
 		/// the HTML. It should be the name of the property exposed by IE on it's element object.</param>
 		/// <returns>The value of the attribute if available; otherwise <c>null</c> is returned.</returns>
-        public string GetAttributeValue(string attributeName)
-		{
-		    return GetAttributeValue(attributeName, NativeElement);
-		}
-
-        public static string GetAttributeValue(string attributeName, INativeElement nativeElement)
+		public string GetAttributeValue(string attributeName)
 		{
 			if (UtilityClass.IsNullOrEmpty(attributeName))
 			{
 				throw new ArgumentNullException("attributeName", "Null or Empty not allowed.");
 			}
 
-            var toLowerInvariant = attributeName.ToLowerInvariant();
-            
-            if (toLowerInvariant == "style")
+			if (string.Compare(attributeName, "style", true) == 0)
 			{
-                return nativeElement.GetStyleAttributeValue("csstext");
+				return Style.CssText;
 			}
 
-            if (toLowerInvariant.StartsWith("style."))
-            {
-                return nativeElement.GetStyleAttributeValue(attributeName.Substring(6));
-            }
-
-			return nativeElement.GetAttributeValue(attributeName);
+			return NativeElement.GetAttributeValue(attributeName);
 		}
 
 		/// <summary>
@@ -390,7 +400,7 @@ namespace WatiN.Core
 
 			Highlight(true);
 
-			UtilityClass.AsyncActionOnBrowser(NativeElement.ClickOnElement);
+			UtilityClass.AsyncActionOnBrowser(new ThreadStart(NativeElement.ClickOnElement));
 
 		    Highlight(false);
 		}
@@ -455,7 +465,9 @@ namespace WatiN.Core
 
 		private static NameValueCollection GetKeyCodeEventProperty(char character)
 		{
-		    return new NameValueCollection(1) {{"keyCode", ((int) character).ToString()}};
+			NameValueCollection eventProperties = new NameValueCollection(1);
+			eventProperties.Add("keyCode", ((int) character).ToString());
+			return eventProperties;
 		}
 
 		/// <summary>
@@ -595,7 +607,7 @@ namespace WatiN.Core
 		/// <param name="numberOfFlashes">The number of flashes.</param>
 		public void Flash(int numberOfFlashes)
 		{
-			for (var counter = 0; counter < numberOfFlashes; counter++)
+			for (int counter = 0; counter < numberOfFlashes; counter++)
 			{
 				Highlight(true);
 				Thread.Sleep(250);
@@ -610,44 +622,86 @@ namespace WatiN.Core
 		/// <param name="doHighlight">if set to <c>true</c> the element is highlighted; otherwise it's not.</param>
 		public void Highlight(bool doHighlight)
 		{
-		    if (!Settings.HighLightElement) return;
-		    
-            if (_originalcolor == null)
-		    {
-		        _originalcolor = new Stack();
-		    }
+			if (Settings.HighLightElement)
+			{
+				if (_originalcolor == null)
+				{
+					_originalcolor = new Stack();
+				}
 
-		    if (doHighlight)
-		    {
-		        _originalcolor.Push(NativeElement.BackgroundColor);
-		        SetBackgroundColor(Settings.HighLightColor);
-		    }
-		    else
-		    {
-		        if(_originalcolor.Count > 0)
-		        {
-		            SetBackgroundColor(_originalcolor.Pop() as string);
-		        }
-		    }
+				if (doHighlight)
+				{
+					_originalcolor.Push(NativeElement.BackgroundColor);
+					SetBackgroundColor(Settings.HighLightColor);
+				}
+				else
+				{
+					if(_originalcolor.Count > 0)
+					{
+						SetBackgroundColor(_originalcolor.Pop() as string);
+					}
+				}
+			}
 		}
 
 		private void SetBackgroundColor(string color) 
 		{
 			try
 			{
-				NativeElement.BackgroundColor = color ?? "";
+				if (color != null)
+				{
+					NativeElement.BackgroundColor = color;
+					
+				}
+				else
+				{
+					NativeElement.BackgroundColor = "";
+				}
 			}
 			catch{}
 		}
 
-        /// <summary>
-        /// Gets the DomContainer for this element.
-        /// </summary>
-        public DomContainer DomContainer { get; private set; }
+		// TODO: Remove this property or move it to IEElement
+		protected IHTMLElement htmlElement
+		{
+			get { return (IHTMLElement) HTMLElement; }
+		}
 
 		/// <summary>
-		/// Gets a reference to the wrapper which incapsulates a native element in the browser.
+		/// Gets the DOMcontainer for this element.
 		/// </summary>
+		/// <value>The DOM container.</value>
+		public DomContainer DomContainer
+		{
+			get { return _domContainer; }
+		}
+
+		//TODO: Should return INativeElement instead of object
+
+		/// <summary>
+		/// Gets the DOM HTML element for this instance as an object. Cast it to 
+		/// the interface you need. Most of the time the object supports IHTMLELement, 
+		/// IHTMLElement2 and IHTMLElement3 but you can also cast it to a more
+		/// specific interface. You should reference the microsoft.MSHTML.dll 
+		/// assembly to cast it to a valid type.
+		/// </summary>
+		/// <value>The DOM element.</value>
+		public object HTMLElement
+		{
+			get
+			{
+				return ((IEElement)NativeElement).NativeElement;
+			}
+		}
+
+		/// <summary>
+		/// Gets the DOM HTML element for this instance as an object. Cast it to 
+		/// the interface you need. Most of the time the object supports IHTMLELement, 
+		/// IHTMLElement2 and IHTMLElement3 but you can also cast it to a more
+		/// specific interface. You should reference the microsoft.MSHTML.dll 
+		/// assembly to cast it to a valid type.
+		/// </summary>
+		/// <value>The DOM element.</value>
 		public INativeElement NativeElement
 		{
 			get
@@ -658,13 +712,13 @@ namespace WatiN.Core
 					{
 						WaitUntilExists();
 					}
-					catch (Exceptions.TimeoutException e)
+					catch (WatiN.Core.Exceptions.TimeoutException e)
 					{
 					    if(e.InnerException == null)
 						{
-							throw new ElementNotFoundException(_nativeElementFinder.ElementTagsToString, _nativeElementFinder.ConstraintToString, DomContainer.Url);
+							throw new ElementNotFoundException(_nativeElementFinder.ElementTagsToString, _nativeElementFinder.ConstriantToString, _domContainer.Url);
 						}
-                        throw new ElementNotFoundException(_nativeElementFinder.ElementTagsToString, _nativeElementFinder.ConstraintToString, DomContainer.Url, e.InnerException);
+                        throw new ElementNotFoundException(_nativeElementFinder.ElementTagsToString, _nativeElementFinder.ConstriantToString, _domContainer.Url, e.InnerException);
 					}
 				}
 
@@ -779,6 +833,7 @@ namespace WatiN.Core
 			WaitUntil(constraint, Settings.WaitUntilExistsTimeOut);
 		}
 
+#if !NET11
         /// <summary>
 		/// Waits until the given <paramref name="predicate" /> matches.
 		/// Wait will time out after <see cref="Settings.WaitUntilExistsTimeOut"/> seconds.
@@ -788,23 +843,52 @@ namespace WatiN.Core
 		{
 			WaitUntil(Find.ByElement(predicate), Settings.WaitUntilExistsTimeOut);
 		}
-
-        /// <summary>
+#endif
+		/// <summary>
 		/// Waits until the given <paramref name="constraint" /> matches.
 		/// </summary>
 		/// <param name="constraint">The BaseConstraint.</param>
 		/// <param name="timeout">The timeout.</param>
 		public void WaitUntil(BaseConstraint constraint, int timeout)
 		{
-			// Calling Exists will refresh the reference to the html element
-			// so the compare is against the current html element (and not 
-			// against some cached reference.
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(timeout)
-            {
-                ExceptionMessage = () => string.Format("waiting {0} seconds for element matching constraint: {1}", timeout, constraint.ConstraintToString())
-            };
+			Exception lastException;
+			SimpleTimer timeoutTimer = new SimpleTimer(timeout);
 
-            tryActionUntilTimeOut.Try(() => Exists && constraint.Compare(NativeElement.GetAttributeBag(DomContainer)));
+			do
+			{
+				lastException = null;
+
+				try
+				{
+					// Calling Exists will refresh the reference to the html element
+					// so the compare is against the current html element (and not 
+					// against some cached reference.
+					if (Exists)
+					{
+						if (constraint.Compare(NativeElement.GetAttributeBag(_domContainer)))
+						{
+							return;
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					lastException = e;
+				}
+
+				Thread.Sleep(200);
+			} while (!timeoutTimer.Elapsed);
+
+			ThrowTimeOutException(lastException, string.Format("waiting {0} seconds for element matching constraint: {1}", timeout, constraint.ConstraintToString()));
+		}
+
+		private static void ThrowTimeOutException(Exception lastException, string message)
+		{
+		    if (lastException != null)
+			{
+				throw new WatiN.Core.Exceptions.TimeoutException(message, lastException);
+			}
+		    throw new WatiN.Core.Exceptions.TimeoutException(message);
 		}
 
 	    private void waitUntilExistsOrNot(int timeout, bool waitUntilExists)
@@ -835,13 +919,29 @@ namespace WatiN.Core
 
         private void LoopUntilExistsEqualsWaitUntilExistsArgument(bool waitUntilExists, int timeout)
         {
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(timeout)
-                {
-                    ExceptionMessage = () => string.Format("waiting {0} seconds for element to {1}.", timeout,
-                                                  waitUntilExists ? "show up" : "disappear")
-                };
+            Exception lastException;
+            SimpleTimer timeoutTimer = new SimpleTimer(timeout);
 
-            tryActionUntilTimeOut.Try(() => Exists == waitUntilExists);
+            do
+            {
+                lastException = null;
+
+                try
+                {
+                    if (Exists == waitUntilExists)
+                    {
+                        return;
+                    }
+                }
+                catch (Exception e)
+                {
+                    lastException = e;
+                }
+
+                Thread.Sleep(200);
+            } while (!timeoutTimer.Elapsed);
+
+            ThrowTimeOutException(lastException, string.Format("waiting {0} seconds for element to {1}.", timeout, waitUntilExists ? "show up" : "disappear"));
         }
 
         /// <summary>
@@ -929,63 +1029,65 @@ namespace WatiN.Core
 		/// </summary>
 		public void WaitForComplete()
 		{
-			DomContainer.WaitForComplete();
+			_domContainer.WaitForComplete();
 		}
 
 
-        /// <summary>
-	    /// Gets the closest ancestor of the specified type.
-	    /// </summary>
-	    /// <returns>An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.</returns>
-	    ///<example>
-	    /// The following example returns the Div a textfield is located in.
-	    /// <code>
-	    /// IE ie = new IE("http://www.example.com");
-	    /// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;;
-	    /// </code>
-	    /// </example>
-        public T Ancestor<T>() where T : Element
-        {
-    	    return (T)Ancestor(typeof(T));
-        }
+#if !NET11
+    /// <summary>
+	/// Gets the closest ancestor of the specified type.
+	/// </summary>
+	/// <returns>An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.</returns>
+	///<example>
+	/// The following example returns the Div a textfield is located in.
+	/// <code>
+	/// IE ie = new IE("http://www.example.com");
+	/// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;;
+	/// </code>
+	/// </example>
+   public T Ancestor<T>() where T : Element
+    {
+    	return (T)Ancestor(typeof(T));
+    }
 
-        /// <summary>
-        /// Gets the closest ancestor of the specified Type and constraint.
-        /// </summary>
-        /// <param name="findBy">The constraint to match with.</param>
-        /// <returns>
-        /// An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.
-        /// </returns>
-        /// <example>
-        /// The following example returns the Div a textfield is located in.
-        /// <code>
-        /// IE ie = new IE("http://www.example.com");
-        /// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;(Find.ByText("First name"));
-        /// </code>
-        /// </example>
-        public T Ancestor<T>(BaseConstraint findBy) where T : Element
-        {
-    	    return (T)Ancestor(typeof(T), findBy);
-        }
+    /// <summary>
+    /// Gets the closest ancestor of the specified Type and constraint.
+    /// </summary>
+    /// <param name="findBy">The constraint to match with.</param>
+    /// <returns>
+    /// An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.
+    /// </returns>
+    /// <example>
+    /// The following example returns the Div a textfield is located in.
+    /// <code>
+    /// IE ie = new IE("http://www.example.com");
+    /// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;(Find.ByText("First name"));
+    /// </code>
+    /// </example>
+    public T Ancestor<T>(BaseConstraint findBy) where T : Element
+    {
+    	return (T)Ancestor(typeof(T), findBy);
+    }
 
-        /// <summary>
-        /// Gets the closest ancestor of the specified Type and constraint.
-        /// </summary>
-        /// <param name="predicate">The constraint to match with.</param>
-        /// <returns>
-        /// An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.
-        /// </returns>
-        /// <example>
-        /// The following example returns the Div a textfield is located in.
-        /// <code>
-        /// IE ie = new IE("http://www.example.com");
-        /// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;(div => div.Text == "First name");
-        /// </code>
-        /// </example>
-        public T Ancestor<T>(Predicate<T> predicate) where T : Element
-        {
-    	    return (T)Ancestor(typeof(T), Find.ByElement(predicate));
-        }
+    /// <summary>
+    /// Gets the closest ancestor of the specified Type and constraint.
+    /// </summary>
+    /// <param name="predicate">The constraint to match with.</param>
+    /// <returns>
+    /// An instance of the ancestorType. If no ancestor of ancestorType is found <code>null</code> is returned.
+    /// </returns>
+    /// <example>
+    /// The following example returns the Div a textfield is located in.
+    /// <code>
+    /// IE ie = new IE("http://www.example.com");
+    /// Div mainDiv = ie.TextField("firstname").Ancestor&lt;Div&gt;(div => div.Text == "First name");
+    /// </code>
+    /// </example>
+    public T Ancestor<T>(Predicate<T> predicate) where T : Element
+    {
+    	return (T)Ancestor(typeof(T), Find.ByElement(predicate));
+    }
+#endif
 
 		/// <summary>
 		/// Gets the closest ancestor of the specified type.
@@ -1018,14 +1120,20 @@ namespace WatiN.Core
 		/// </example>
 		public Element Ancestor(BaseConstraint findBy)
 		{
-			var parentElement = Parent;
+			Element parentElement = Parent;
 
             if (parentElement == null)
             {
                 return null;
             }
             
-            return findBy.Compare(parentElement) ? parentElement : parentElement.Ancestor(findBy);
+            if (findBy.Compare(parentElement))
+            {
+                return parentElement;
+            }
+
+            return parentElement.Ancestor(findBy);
+
 		}
 
 		/// <summary>
@@ -1072,12 +1180,13 @@ namespace WatiN.Core
 		/// </example>
 		public Element Ancestor(string tagName, BaseConstraint findBy)
 		{
-			var findAncestor = Find.By("tagname", new StringEqualsAndCaseInsensitiveComparer(tagName))
+			BaseConstraint findAncestor = Find.By("tagname", new StringEqualsAndCaseInsensitiveComparer(tagName))
 			                                   && findBy;
 
 			return Ancestor(findAncestor);
 		}
 
+#if !NET11
         /// <summary>
 		/// Gets the closest ancestor of the specified Tag and AttributConstraint.
 		/// </summary>
@@ -1097,13 +1206,13 @@ namespace WatiN.Core
 		/// </example>
 		public Element Ancestor(string tagName, Predicate<Element> predicate)
 		{
-			var findAncestor = Find.By("tagname", new StringEqualsAndCaseInsensitiveComparer(tagName))
+			BaseConstraint findAncestor = Find.By("tagname", new StringEqualsAndCaseInsensitiveComparer(tagName))
                                                && Find.ByElement(predicate);
 
 			return Ancestor(findAncestor);
 		}
-
-        /// <summary>
+#endif
+		/// <summary>
 		/// Gets the closest ancestor of the specified Tag.
 		/// </summary>
 		/// <param name="tagName">The tag of the ancestor.</param>
@@ -1124,12 +1233,12 @@ namespace WatiN.Core
 
 		public string GetValue(string attributename)
 		{
-			return NativeElement.GetAttributeBag(DomContainer).GetValue(attributename);
+			return NativeElement.GetAttributeBag(_domContainer).GetValue(attributename);
 		}
 
-		internal static Element New(DomContainer domContainer, INativeElement element)
+		internal static Element New(DomContainer domContainer, IHTMLElement element)
 		{
-            return TypedElementFactory.CreateTypedElement(domContainer, element);
+            return TypedElementFactory.CreateTypedElement(domContainer, domContainer.NativeBrowser.CreateElement(element));
 		}
 	}
 }

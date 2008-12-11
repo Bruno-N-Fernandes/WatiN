@@ -17,6 +17,7 @@
 #endregion Copyright
 
 using System.Collections;
+using mshtml;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core
@@ -25,7 +26,11 @@ namespace WatiN.Core
 	/// This class provides specialized functionality for a HTML input element of type 
 	/// button, submit, image and reset.
 	/// </summary>
+#if NET11
+	public class Button : Element
+#else
     public class Button : Element<Button>
+#endif
     {
 		private static ArrayList elementTags;
 
@@ -35,11 +40,9 @@ namespace WatiN.Core
 			{
 				if (elementTags == null)
 				{
-					elementTags = new ArrayList
-					                  {
-					                      new ElementTag("input", "button submit image reset"), 
-                                          new ElementTag("button")
-					                  };
+					elementTags = new ArrayList();
+					elementTags.Add(new ElementTag("input", "button submit image reset"));
+					elementTags.Add(new ElementTag("button"));
 				}
 
 				return elementTags;
@@ -52,7 +55,8 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The <see cref="DomContainer" /> the element is in.</param>
 		/// <param name="element">The input button or button element.</param>
-		public Button(DomContainer domContainer, INativeElement element) : base(domContainer, element) { }
+		public Button(DomContainer domContainer, IHTMLElement element) :
+            base(domContainer, domContainer.NativeBrowser.CreateElement(element)) { }
 
 		/// <summary>
 		/// Initialises a new instance of the <see cref="Button"/> class.
@@ -97,7 +101,7 @@ namespace WatiN.Core
 			return Value;
 		}
 
-		internal static Element New(DomContainer domContainer, INativeElement element)
+		internal new static Element New(DomContainer domContainer, IHTMLElement element)
 		{
 			return new Button(domContainer, element);
 		}

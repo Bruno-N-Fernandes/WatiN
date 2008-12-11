@@ -19,9 +19,5 @@ namespace WatiN.Core.DialogHandlers
         void SendMessage(int msg, int wParam, int lParam);
         
         IntPtr GetDlgItem(int controlid);
-        
-        void SendString(string s);
-        
-        void SetFocus();
     }
 }

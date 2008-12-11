@@ -17,36 +17,38 @@
 #endregion Copyright
 
 using System;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Moq;
 using NUnit.Framework;
-using NUnit.Framework.SyntaxHelpers;
-using WatiN.Core.Constraints;
+using Rhino.Mocks;
 using WatiN.Core.Interfaces;
 using WatiN.Core.InternetExplorer;
 using WatiN.Core.UnitTests.AttributeConstraintTests;
+using Iz=NUnit.Framework.SyntaxHelpers.Is;
 
 namespace WatiN.Core.UnitTests.IETests
 {
 	[TestFixture]
 	public class IEElementFinderTests : BaseWithIETests
 	{
-		private Mock<IElementCollection> stubElementCollection;
-		private Mock<DomContainer> domContainerMock;
+		private MockRepository mocks;
+		private IElementCollection stubElementCollection;
+		private DomContainer domContainer;
 
 		public void SetUp()
 		{
-			stubElementCollection = new Mock<IElementCollection>();
-			domContainerMock = new Mock<DomContainer>();
+			mocks = new MockRepository();
+			stubElementCollection = (IElementCollection) mocks.CreateMock(typeof (IElementCollection));
+			domContainer = (DomContainer)mocks.DynamicMock(typeof(DomContainer));
 
-			stubElementCollection.Expect(elements => elements.Elements).Returns(null);
+			SetupResult.For(stubElementCollection.Elements).Return(null);
+
+			mocks.ReplayAll();
 		}
 
 		[TearDown]
 		public void TearDown()
 		{
-			domContainerMock.VerifyAll();
+			mocks.VerifyAll();
 		}
 
 		[Test]
@@ -54,7 +56,7 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 
-			INativeElementFinder finder = new IEElementFinder("input", "text", stubElementCollection.Object, domContainerMock.Object);
+			INativeElementFinder finder = new IEElementFinder("input", "text", stubElementCollection, domContainer);
 
 			Assert.IsNull(finder.FindFirst());
 		}
@@ -64,10 +66,9 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 			
-			INativeElementFinder finder = new IEElementFinder("input", "text", stubElementCollection.Object, domContainerMock.Object);
+			INativeElementFinder finder = new IEElementFinder("input", "text", stubElementCollection, domContainer);
 
-		    var all = new List<INativeElement>(finder.FindAll());
-		    Assert.AreEqual(0, all.Count);
+			Assert.AreEqual(0, finder.FindAll().Count);
 		}
 
 		[Test]
@@ -75,13 +76,13 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 			
-			var constraint = new MyTestConstraint();
-			INativeElementFinder finder = new IEElementFinder("input", "text", constraint, stubElementCollection.Object, domContainerMock.Object);
+			MyTestConstraint constraint = new MyTestConstraint();
+			INativeElementFinder finder = new IEElementFinder("input", "text", constraint, stubElementCollection, domContainer);
 			
 			finder.FindFirst();
 
-			Assert.That(constraint.CallsToReset, Is.EqualTo(1), "Unexpected number of calls to reset");
-			Assert.That(constraint.CallsToCompare, Is.EqualTo(0), "Unexpected number of calls to compare");
+			Assert.That(constraint.CallsToReset, Iz.EqualTo(1), "Unexpected number of calls to reset");
+			Assert.That(constraint.CallsToCompare, Iz.EqualTo(0), "Unexpected number of calls to compare");
 		}
 
 		// TODO: More tests to cover positive find results		[Test]
@@ -90,8 +91,8 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 			
-			Assert.That(ie.Span("divid").Exists, Is.False);
-			Assert.That(ie.Div("divid").Exists, Is.True);
+			Assert.That(ie.Span("divid").Exists, NUnit.Framework.SyntaxHelpers.Is.False);
+			Assert.That(ie.Div("divid").Exists, NUnit.Framework.SyntaxHelpers.Is.True);
 		}
 
 		[Test]
@@ -99,7 +100,7 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 			
-			Assert.That(ie.TextField("textinput1").Exists, Is.False);
+			Assert.That(ie.TextField("textinput1").Exists, NUnit.Framework.SyntaxHelpers.Is.False);
 		}
 
 		[Test]
@@ -107,27 +108,25 @@ namespace WatiN.Core.UnitTests.IETests
 		{
 			SetUp();
 			
-			// Kick this code off to exclude initialization time during measurement
+			// Kick this code off to prevent initialization issues during measurement
 			Assert.IsTrue(ie.Div("divid").Exists);
 
-			var ticksByExactId = GetTicks(Find.ById("divid"));
-            var ticksByRegExId = GetTicks(Find.ById(new Regex("divid")));
+			long ticks = DateTime.Now.Ticks;
+			for (int index = 0; index < 100; index++ )
+				Assert.IsTrue(ie.Div("divid").Exists);
+			ticks = DateTime.Now.Ticks - ticks;
 
-            Console.WriteLine("Find.By exact id: " + ticksByExactId);
-            Console.WriteLine("Find.By regex id: " + ticksByRegExId);
-			
-            Assert.That(ticksByExactId, Is.LessThan(ticksByRegExId), "Lost performance gain");
+			long ticksWithRegEx = DateTime.Now.Ticks;
+			for (int index = 0; index < 100; index++)
+				Assert.IsTrue(ie.Div(new Regex("divid")).Exists);
+			ticksWithRegEx = DateTime.Now.Ticks - ticksWithRegEx;
+
+			Console.WriteLine("Find.By exact id: " + ticks);
+			Console.WriteLine("Find.By regex id: " + ticksWithRegEx);
+			Assert.That(ticks, NUnit.Framework.SyntaxHelpers.Is.LessThan(ticksWithRegEx), "Lost performance gain");
 		}
 
-	    private long GetTicks(BaseConstraint findBy)
-	    {
-	        var ticks = DateTime.Now.Ticks;
-	        for (var index = 0; index < 100; index++ ) Assert.IsTrue(ie.Div(findBy).Exists);
-	        ticks = DateTime.Now.Ticks - ticks;
-	        return ticks;
-	    }
-
-	    public override Uri TestPageUri
+		public override Uri TestPageUri
 		{
 			get { return MainURI; }
 		}

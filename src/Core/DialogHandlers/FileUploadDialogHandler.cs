@@ -16,30 +16,30 @@
 
 #endregion Copyright
 
+using System;
+
 namespace WatiN.Core.DialogHandlers
 {
 	public class FileUploadDialogHandler : BaseDialogHandler
 	{
-		private readonly string fileName;
+		private string fileName;
 
 		public FileUploadDialogHandler(string fileName)
 		{
-		    this.fileName = fileName;
+			this.fileName = UtilityClass.EscapeSendKeysCharacters(fileName);
 		}
 
 		public override bool HandleDialog(Window window)
 		{
 			if (IsFileUploadDialog(window))
 			{
-				var fileNameHandle = NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit");
-			    var fileNameHwnd = new Hwnd(fileNameHandle);
+				IntPtr usernameControlHandle = NativeMethods.GetChildWindowHwnd(window.Hwnd, "Edit");
 
-			    fileNameHwnd.SetFocus();
-                fileNameHwnd.SendString(fileName);
+				NativeMethods.SetForegroundWindow(usernameControlHandle);
+				NativeMethods.SetActiveWindow(usernameControlHandle);
 
-                var openButton = new WinButton(1, window.Hwnd);
-                openButton.Click();
-                
+
+				System.Windows.Forms.SendKeys.SendWait(fileName + "{ENTER}");
 				return true;
 			}
 

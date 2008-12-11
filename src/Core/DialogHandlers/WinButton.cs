@@ -17,13 +17,12 @@
 #endregion Copyright
 
 using System;
-using WatiN.Core.Logging;
 
 namespace WatiN.Core.DialogHandlers
 {
 	public class WinButton
 	{
-		private readonly IHwnd _hWnd;
+		private IHwnd _hWnd;
 
 		public WinButton(IntPtr Hwnd) : this(new Hwnd(Hwnd))
 		{}
@@ -43,13 +42,12 @@ namespace WatiN.Core.DialogHandlers
 
 		public void Click()
 		{
-		    if (!Exists()) return;
-
-            Logger.LogAction("Clicking on '{0}'", Title);
-
-            _hWnd.SendMessage(NativeMethods.WM_ACTIVATE, NativeMethods.MA_ACTIVATE, 0);
-            _hWnd.SendMessage(NativeMethods.BM_CLICK, 0, 0);
-        }
+			if (Exists())
+			{
+				_hWnd.SendMessage(NativeMethods.WM_ACTIVATE, NativeMethods.MA_ACTIVATE, 0);
+				_hWnd.SendMessage(NativeMethods.BM_CLICK, 0, 0);
+			}
+		}
 
 		public bool Exists()
 		{

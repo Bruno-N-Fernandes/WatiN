@@ -16,87 +16,91 @@
 
 #endregion Copyright
 
-using Moq;
+using mshtml;
 using NUnit.Framework;
-using WatiN.Core.Interfaces;
+using Rhino.Mocks;
 using WatiN.Core.InternetExplorer;
-using NUnit.Framework.SyntaxHelpers;
+using Iz = NUnit.Framework.SyntaxHelpers.Is;
 
 namespace WatiN.Core.UnitTests
 {
 	[TestFixture]
 	public class ElementAttributeBagTests
 	{
-	    private Mock<DomContainer> mockDomContainer;
+		private MockRepository mocks;
+		private IHTMLStyle mockHTMLStyle;
+		private IHTMLElement mockHTMLElement;
+	    private DomContainer domContainer;
 
 		[SetUp]
 		public void SetUp()
 		{
-            mockDomContainer = new Mock<DomContainer>();
+			mocks = new MockRepository();
+			mockHTMLStyle = (IHTMLStyle) mocks.CreateMock(typeof (IHTMLStyle));
+            mockHTMLElement = (IHTMLElement)mocks.CreateMock(typeof(IHTMLElement)); 
+            domContainer = (DomContainer)mocks.DynamicMock(typeof(DomContainer));
+		}
+
+		[TearDown]
+		public void TearDown()
+		{
+			mocks.VerifyAll();
 		}
 
 		[Test]
 		public void StyleAttributeShouldReturnAsString()
 		{
-            // GIVEN
 			const string cssText = "COLOR: white; FONT-STYLE: italic";
 
-            var mockNativeElement = new Mock<INativeElement>();
-            mockNativeElement.Expect(element => element.GetStyleAttributeValue("csstext")).Returns(cssText);
+			Expect.Call(mockHTMLStyle.cssText).Return(cssText);
+			Expect.Call(mockHTMLElement.style).Return(mockHTMLStyle);
 
-            var attributeBag = new ElementAttributeBag(mockDomContainer.Object, mockNativeElement.Object);
+			mocks.ReplayAll();
 
-            // WHEN
-		    var value = attributeBag.GetValue("style");
+            ElementAttributeBag attributeBag = new ElementAttributeBag(domContainer, mockHTMLElement);
 
-            // THEN
-		    Assert.That(cssText, Is.EqualTo(value));
+			Assert.AreEqual(cssText, attributeBag.GetValue("style"));
 		}
 
 		[Test]
 		public void StyleDotStyleAttributeNameShouldReturnStyleAttribute()
 		{
-            // GIVEN
 			const string styleAttributeValue = "white";
+			const string styleAttributeName = "color";
 
-            var mockNativeElement = new Mock<INativeElement>();
-            mockNativeElement.Expect(element => element.GetStyleAttributeValue("color")).Returns(styleAttributeValue);
-            
-            var attributeBag = new ElementAttributeBag(mockDomContainer.Object, mockNativeElement.Object);
+			Expect.Call(mockHTMLStyle.getAttribute(styleAttributeName, 0)).Return(styleAttributeValue);
+			Expect.Call(mockHTMLElement.style).Return(mockHTMLStyle);
 
-            // WHEN
-		    var value = attributeBag.GetValue("style.color");
+			mocks.ReplayAll();
 
-            // THEN
-		    Assert.AreEqual(styleAttributeValue, value);
+            ElementAttributeBag attributeBag = new ElementAttributeBag(domContainer, mockHTMLElement);
+
+			Assert.AreEqual(styleAttributeValue, attributeBag.GetValue("style.color"));
 		}
 
         [Test]
         public void CachedElementPropertiesShouldBeClearedIfNewHtmlElementIsSet()
         {
-            // GIVEN
-            var mockNativeElement = new Mock<INativeElement>();
-            mockNativeElement.Expect(element => element.GetAttributeValue("id")).Returns("one");
-            mockNativeElement.Expect(element => element.TagName).Returns("li");
+            Expect.Call(mockHTMLElement.getAttribute("id", 0)).Return("one").Repeat.Any();
+            Expect.Call(mockHTMLElement.getAttribute("tagName", 0)).Return("li").Repeat.Any();
             
-            var mockNativeElement2 = new Mock<INativeElement>();
-            mockNativeElement2.Expect(element => element.GetAttributeValue("id")).Returns("two");
-            mockNativeElement2.Expect(element => element.TagName).Returns("li");
+            IHTMLElement mockHTMLElement2 = (IHTMLElement)mocks.CreateMock(typeof(IHTMLElement));
+            Expect.Call(mockHTMLElement2.getAttribute("id", 0)).Return("two").Repeat.Any();
+            Expect.Call(mockHTMLElement2.getAttribute("tagName", 0)).Return("li").Repeat.Any();
+            Expect.Call(domContainer.NativeBrowser).Return(new IEBrowser(domContainer)).Repeat.Any();
 
-            var ieBrowser = new IEBrowser(mockDomContainer.Object);
-            mockDomContainer.Expect(domContainer => domContainer.NativeBrowser).Returns(ieBrowser);
+            mocks.ReplayAll();
 
-            var attributeBag = new ElementAttributeBag(mockDomContainer.Object, mockNativeElement.Object);
+            ElementAttributeBag attributeBag = new ElementAttributeBag(domContainer, mockHTMLElement);
 
-            Assert.That(attributeBag.Element.Id, Is.EqualTo("one"), "Unexpected Element");
-            Assert.That(attributeBag.ElementTyped.Id, Is.EqualTo("one"), "Unexpected ElementTyped");
+            Assert.That(attributeBag.Element.Id, Iz.EqualTo("one"), "Unexpected Element");
+            Assert.That(attributeBag.ElementTyped.Id, Iz.EqualTo("one"), "Unexpected ElementTyped");
 
-            // WHEN
-            attributeBag.INativeElement = mockNativeElement2.Object;
+            attributeBag.IHTMLElement = mockHTMLElement2;
 
-            // THEN
-            Assert.That(attributeBag.Element.Id, Is.EqualTo("two"), "Unexpected Element");
-            Assert.That(attributeBag.ElementTyped.Id, Is.EqualTo("two"), "Unexpected ElementTyped");
+            Assert.That(attributeBag.Element.Id, Iz.EqualTo("two"), "Unexpected Element");
+            Assert.That(attributeBag.ElementTyped.Id, Iz.EqualTo("two"), "Unexpected ElementTyped");
+
         }
 	}
 }

@@ -27,14 +27,14 @@ namespace WatiN.Core.UnitTests
 	{
 		public override Uri TestPageUri
 		{
-			get { return MainURI; }
+			get { return BaseWatiNTest.MainURI; }
 		}
 
 		[Test]
 		public void FirstWithAttributConstraint()
 		{
-			var elements = ie.Elements;
-			var element = elements.First(Find.ById("popupid"));
+			ElementCollection elements = ie.Elements;
+			Element element = elements.First(Find.ById("popupid"));
 			Assert.That(element.Exists, Is.True);
 			Assert.That(element, Is.TypeOf(typeof(Button)));
 		}
@@ -42,7 +42,7 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void First()
 		{
-			var buttons = ie.Buttons;
+			ButtonCollection buttons = ie.Buttons;
 			Element element = buttons.First();
 
 			Assert.That(element.Exists, Is.True);
@@ -50,10 +50,12 @@ namespace WatiN.Core.UnitTests
 			Assert.That(element, Is.TypeOf(typeof(Button)));
 		}
 
+#if !NET11
         [Test]
         public void ExistUsingPredicateT()
         {
-            Assert.That(ie.Buttons.Exists(b => b.Id == "helloid"));
+            Assert.That(ie.Buttons.Exists(delegate(Button b) { return b.Id == "helloid"; }));
         }
+#endif
 	}
 }

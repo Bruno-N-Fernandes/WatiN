@@ -17,7 +17,6 @@
 #endregion Copyright
 
 using System.Threading;
-using WatiN.Core.UtilityClasses;
 
 namespace WatiN.Core.DialogHandlers
 {
@@ -85,8 +84,11 @@ namespace WatiN.Core.DialogHandlers
 
         public bool WaitUntilHandled(int timeoutAfterSeconds)
         {
-            var tryActionUntilTimeOut = new TryActionUntilTimeOut(timeoutAfterSeconds);
-            tryActionUntilTimeOut.Try(() => HasHandledDialog);
+            SimpleTimer timer = new SimpleTimer(timeoutAfterSeconds);
+            while (!HasHandledDialog && !timer.Elapsed)
+            {
+                Thread.Sleep(200);
+            }
 
             return HasHandledDialog;
         }

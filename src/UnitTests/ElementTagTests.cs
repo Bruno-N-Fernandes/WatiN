@@ -19,8 +19,9 @@
 using System.Collections;
 using System.Globalization;
 using System.Threading;
-using Moq;
+using mshtml;
 using NUnit.Framework;
+using Rhino.Mocks;
 using WatiN.Core.Interfaces;
 
 namespace WatiN.Core.UnitTests
@@ -31,20 +32,28 @@ namespace WatiN.Core.UnitTests
 		[Test]
 		public void CompareNullShouldReturnFalse()
 		{
-			var elementTag = new ElementTag("tagname", "");
+			ElementTag elementTag = new ElementTag("tagname", "");
 			Assert.IsFalse(elementTag.Compare(null));
 		}
 
+		// TODO: Can be dropped when all refactored to IBrowserElement
 		[Test]
 		public void IsValidElementWithNullElementShouldReturnFalse()
 		{
-			Assert.IsFalse(ElementTag.IsValidElement(null, new ArrayList()));
+			Assert.IsFalse(ElementTag.IsValidElement((IHTMLElement)null, new ArrayList()));
+			Assert.IsFalse(ElementTag.IsValidElement((object)null, new ArrayList()));
+		}
+
+		[Test]
+		public void IsValidElementWithObjectNotImplementingIHTMLElementShouldReturnFalse()
+		{
+			Assert.IsFalse(ElementTag.IsValidElement(new object(), new ArrayList()));
 		}
 
 		[Test]
 		public void ToStringShouldBeEmptyIfTagNameIsNull()
 		{
-			var elementTag = new ElementTag((string) null);
+			ElementTag elementTag = new ElementTag((string) null);
 			Assert.That(elementTag.ToString(), NUnit.Framework.SyntaxHelpers.Is.EqualTo(""));
 		}
 
@@ -52,21 +61,22 @@ namespace WatiN.Core.UnitTests
 		public void CompareShouldBeCultureInvariant()
 		{
 			// Get the tr-TR (Turkish-Turkey) culture.
-			var turkish = new CultureInfo("tr-TR");
+			CultureInfo turkish = new CultureInfo("tr-TR");
 
 			// Get the culture that is associated with the current thread.
-			var thisCulture = Thread.CurrentThread.CurrentCulture;
+			CultureInfo thisCulture = Thread.CurrentThread.CurrentCulture;
 
 			try
 			{
 				// Set the culture to Turkish
 				Thread.CurrentThread.CurrentCulture = turkish;
 
-				var elementMock = new Mock<INativeElement>();
+				MockRepository mockRepository = new MockRepository();
+				INativeElement element = (INativeElement) mockRepository.DynamicMock(typeof (INativeElement));
 
-				AssertUpperCaseLowerCase(elementMock);
-				AssertUpperCaseUpperCase(elementMock);
-				AssertLowerCaseUpperCase(elementMock);
+				AssertUpperCaseLowerCase(element, mockRepository);
+				AssertUpperCaseUpperCase(element, mockRepository);
+				AssertLowerCaseUpperCase(element, mockRepository);
 			}
 			finally
 			{
@@ -75,44 +85,54 @@ namespace WatiN.Core.UnitTests
 			}
 		}
 
-		private static void AssertLowerCaseUpperCase(Mock<INativeElement> elementMock) 
+		private static void AssertLowerCaseUpperCase(INativeElement element, MockRepository mockRepository) 
 		{
+			mockRepository.BackToRecordAll();
+
 			// LowerCase
-			elementMock.Expect(element => element.TagName).Returns("input");
-            elementMock.Expect(element => element.GetAttributeValue("type")).Returns("image");
+			SetupResult.For(element.TagName).Return("input");
+			SetupResult.For(element.GetAttributeValue("type")).Return("image");
 
+			mockRepository.ReplayAll();
+				
 			// UpperCase
-			var elementTag = new ElementTag("INPUT", "IMAGE");
-			Assert.IsTrue(elementTag.Compare(elementMock.Object), "Compare should compare using CultureInvariant");
-
-            elementMock.VerifyAll();
+			ElementTag elementTag = new ElementTag("INPUT", "IMAGE");
+			Assert.IsTrue(elementTag.Compare(element), "Compare should compare using CultureInvariant");
+				
+			mockRepository.VerifyAll();
 		}
 
-		private static void AssertUpperCaseUpperCase(Mock<INativeElement> elementMock) 
+		private static void AssertUpperCaseUpperCase(INativeElement element, MockRepository mockRepository) 
 		{
-			// UpperCase
-            elementMock.Expect(element => element.TagName).Returns("INPUT");
-            elementMock.Expect(element => element.GetAttributeValue("type")).Returns("IMAGE");
+			mockRepository.BackToRecordAll();
 
 			// UpperCase
-			var elementTag = new ElementTag("INPUT", "IMAGE");
-			Assert.IsTrue(elementTag.Compare(elementMock.Object), "Compare should compare using CultureInvariant");
+			SetupResult.For(element.TagName).Return("INPUT");
+			SetupResult.For(element.GetAttributeValue("type")).Return("IMAGE");
 
-            elementMock.VerifyAll();
+			mockRepository.ReplayAll();
+				
+			// UpperCase
+			ElementTag elementTag = new ElementTag("INPUT", "IMAGE");
+			Assert.IsTrue(elementTag.Compare(element), "Compare should compare using CultureInvariant");
+				
+			mockRepository.VerifyAll();
 		}
 
-		private static void AssertUpperCaseLowerCase(Mock<INativeElement> elementMock) {
+		private static void AssertUpperCaseLowerCase(INativeElement element, MockRepository mockRepository) {
 			
 			// UpperCase
-            elementMock.Expect(element => element.TagName).Returns("INPUT");
-            elementMock.Expect(element => element.GetAttributeValue("type")).Returns("IMAGE");
+			SetupResult.For(element.TagName).Return("INPUT");
+			SetupResult.For(element.GetAttributeValue("type")).Return("IMAGE");
 			
+			mockRepository.ReplayAll();
+
 			// LowerCase
-			var elementTag = new ElementTag("input", "image");
-			Assert.IsTrue(elementTag.Compare(elementMock.Object), "Compare should compare using CultureInvariant");
+			ElementTag elementTag = new ElementTag("input", "image");
+			Assert.IsTrue(elementTag.Compare(element), "Compare should compare using CultureInvariant");
 			Assert.AreEqual("INPUT (image)", elementTag.ToString(), "ToString problem");
 
-            elementMock.VerifyAll();
+			mockRepository.VerifyAll();
 		}
 	}
 }

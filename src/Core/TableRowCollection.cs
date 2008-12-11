@@ -17,7 +17,7 @@
 #endregion Copyright
 
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using WatiN.Core.Constraints;
 using WatiN.Core.Interfaces;
 
@@ -26,7 +26,11 @@ namespace WatiN.Core
 	/// <summary>
 	/// A typed collection of <see cref="TableRow" /> instances within a <see cref="Document"/> or <see cref="Element"/>.
 	/// </summary>
+#if NET11
+    public class TableRowCollection : BaseElementCollection
+#else
     public class TableRowCollection : BaseElementCollection<TableRow>
+#endif
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TableRowCollection"/> class.
@@ -34,7 +38,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="finder">The finder.</param>
-		public TableRowCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, TableRow.New) {}
+		public TableRowCollection(DomContainer domContainer, INativeElementFinder finder) : base(domContainer, finder, new CreateElementInstance(TableRow.New)) {}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TableRowCollection"/> class.
@@ -42,7 +46,7 @@ namespace WatiN.Core
 		/// </summary>
 		/// <param name="domContainer">The DOM container.</param>
 		/// <param name="elements">The elements.</param>
-        public TableRowCollection(DomContainer domContainer, IEnumerable<INativeElement> elements) : base(domContainer, elements, TableRow.New) { }
+		public TableRowCollection(DomContainer domContainer, ArrayList elements) : base(domContainer, elements, new CreateElementInstance(TableRow.New)) {}
 
 		/// <summary>
 		/// Gets the <see cref="TableRow"/> at the specified index.
@@ -50,7 +54,7 @@ namespace WatiN.Core
 		/// <value></value>
 		public TableRow this[int index]
 		{
-			get { return ElementsTyped(index); }
+			get { return (TableRow) ElementsTyped(index); }
 		}
 
 		public TableRowCollection Filter(BaseConstraint findBy)
@@ -58,9 +62,12 @@ namespace WatiN.Core
 			return new TableRowCollection(domContainer, DoFilter(findBy));
 		}
 
+#if !NET11
         public TableRowCollection Filter(Predicate<TableRow> predicate)
         {
             return new TableRowCollection(domContainer, DoFilter(Find.ByElement(predicate)));
         }
+#endif
+
 	}
 }
